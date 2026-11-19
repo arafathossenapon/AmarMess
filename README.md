@@ -1,27 +1,19 @@
 # AmarMess
 
-AmarMess is a private account-based meal and expense ledger for one mess. It uses Next.js, React, TypeScript, Tailwind CSS, Express, Better Auth, MongoDB and Mongoose.
+AmarMess is a shared meal and expense ledger for one mess. Members can check their meals, deposits, expenses, and balances from a phone or computer.
 
-## Run locally
+## Features
 
-1. Install dependencies with `npm ci`.
-2. Copy `.env.example` to `.env.local`. Set `MONGODB_URI` and `MONGODB_DB` for a local MongoDB or Atlas database. Keep the database separate from production.
-3. Set `BETTER_AUTH_URL` to `http://localhost:3000`. Generate two different values for `BETTER_AUTH_SECRET` and `MESS_SETUP_CODE`, for example by running `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` twice. Set `MESS_SETUP_EMAIL` to the first manager's email.
-4. Run `npm run dev`. Select **I have an invitation code** and use the setup email and code. Create the mess and its first accounting period.
-5. In **Members**, invite each person by email and share their invitation code privately. Each member chooses their own password.
+- Invite-only member accounts, a manager role, and delegated permissions for recording meals, deposits, and expenses
+- Daily breakfast, lunch, and dinner counts, including fractional meals, with manual requests and recurring defaults
+- Signed deposits, grocery expenses with optional shopper credits, and shared and individual charges
+- Bazar dates and a feed of meal and expense activity
+- Active and closed accounting periods, adjustable opening balances through carry-forward, and downloadable PDF reports
 
-## Ledger rules
+## How the ledger works
 
-- Deposits are signed amounts in Bangladeshi taka. Negative entries record withdrawals or adjustments.
-- The meal rate is food costs divided by the total meal count. Shared costs split equally among selected members. Individual costs follow the amounts entered for each member. Monetary allocations reconcile to the paisa.
-- A member who paid for groceries can receive a matching deposit credit. The app splits that credit equally across the selected shoppers.
-- A new accounting period closes the active one. The manager can carry positive and negative balances forward as opening balances.
-- Members can submit meal requests before the daily cutoff in Asia/Dhaka. Automatic defaults appear for review on the same day. Approved requests become ledger entries.
+The meal rate is grocery expenses divided by the total number of meals. Each member's grocery share follows their recorded meal counts. Shared expenses split equally among the selected members. Individual expenses use the amounts entered for each member. Allocations reconcile to the paisa.
 
-## Deploy to Vercel
+A new accounting period locks the previous ledger. The manager can carry positive and negative member balances forward. Meal requests use a configurable cutoff in Asia/Dhaka.
 
-Import the GitHub repository as one Next.js project. Express handles the ledger at `/api/ledger` and Better Auth serves `/api/auth/*` on the same origin.
-
-Set the six variables in `.env.example` as Vercel production environment variables. Use a production MongoDB database and set `BETTER_AUTH_URL` to the exact production origin. Use different environment variables for preview deployments if you enable their authentication. Keep database credentials and setup codes out of Git.
-
-Run `npm run typecheck` and `npm run build` before deploying.
+The app uses semantic HTML, CSS, Tailwind CSS, React, Next.js, TypeScript, Node.js, Express, Better Auth, MongoDB, and Mongoose. Git and GitHub track development.
