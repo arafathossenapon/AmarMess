@@ -2,6 +2,7 @@ import express from "express";
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { auth, createMess, readMess, writeMess } from "../../lib/store";
+import { importLedger, importSchema } from "../../lib/ledger-import";
 import { hashCode } from "../../lib/invite";
 import { activePeriod, dhakaNow, split, summarize, type Entry, type Mess, type Permission } from "../../lib/domain";
 
@@ -21,6 +22,7 @@ const text = z.string().max(500).optional();
 const permissions = z.array(z.enum(["deposit", "meal", "expense"])).max(3);
 const actions = z.discriminatedUnion("op", [
   z.object({ op: z.literal("setup"), name: title }),
+  z.object({ op: z.literal("import"), ledger: importSchema }),
   z.object({ op: z.literal("settings"), name: title, cutoff: z.iso.time({ precision: -1 }) }),
   z.object({ op: z.literal("period"), name: title, start: date, carry: z.boolean() }),
   z.object({ op: z.literal("rename"), name: title }),
@@ -101,6 +103,12 @@ api.all("/api/ledger", async (req, res) => {
   };
   let invitation: string | undefined;
   switch (a.op) {
+    case "import": {
+      manage();
+      const error = importLedger(mess, a.ledger, user, now.date);
+      check(!error, error ?? "");
+      break;
+    }
     case "setup": throw new InputError("The mess already exists.", 409);
     case "settings": manage(); mess.name = a.name; mess.cutoff = a.cutoff; break;
     case "rename": manage(); current().name = a.name; break;

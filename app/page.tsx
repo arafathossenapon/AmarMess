@@ -342,6 +342,18 @@ function SettingsPage({ mess, manager, save }: { mess: Mess; manager: boolean; s
       <Field label="Mess name"><input name="name" required minLength={2} maxLength={90} defaultValue={mess.name} /></Field>
       <Field label="Meal request cutoff (Dhaka time)"><input name="cutoff" type="time" required defaultValue={mess.cutoff} /></Field>
     </Form></Panel>
+    {mess.people.length === 1 && mess.periods.length <= 1 && mess.periods.every(period => !period.entries.length) && <Panel title="Import an existing ledger">
+      <Form save={async payload => {
+        const file = payload.file;
+        let ledger: unknown = null;
+        if (file instanceof File && file.size <= 110000) {
+          try { ledger = JSON.parse(await file.text()); } catch {}
+        }
+        return save({ op: "import", ledger });
+      }} label="Import ledger" action={f => ({ file: f.get("ledger") })}>
+        <Field label="Ledger JSON"><input type="file" name="ledger" accept=".json,application/json" required /></Field>
+      </Form>
+    </Panel>}
     <Panel title="Delete mess"><p>Permanently deletes the workspace and every accounting period.</p>
       <Form danger save={async payload => window.confirm("Permanently delete this mess and its ledger?") && await save(payload)} label="Delete mess" action={f => ({ op: "delete", name: str(f, "name") })}>
         <Field label="Type the mess name to confirm"><input name="name" required /></Field>
