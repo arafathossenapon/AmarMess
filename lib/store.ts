@@ -9,7 +9,7 @@ const globalDb = globalThis as typeof globalThis & {
   messAuth?: ReturnType<typeof makeAuth>;
   messConnection?: ReturnType<typeof mongoose.connect>;
 };
-const database = () => process.env.MONGODB_DB || "messbook";
+const database = () => process.env.MONGODB_DB || "amarmess";
 function uri() {
   if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is required");
   return process.env.MONGODB_URI;
