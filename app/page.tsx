@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createAuthClient } from "better-auth/react";
-import { ArrowUpRight, Bell, CalendarDays, CircleDollarSign, LayoutDashboard, LogOut, Settings, ShoppingBasket, Soup, UserRound, Users, Wallet } from "lucide-react";
+import { ArrowUpRight, Bell, CalendarDays, CircleDollarSign, LayoutDashboard, LogOut, Menu, Settings, ShoppingBasket, Soup, UserRound, Users, Wallet, X } from "lucide-react";
 import { activePeriod, dhakaNow, kindLabels, money, quantity, slots, summarize, totalMeals, zero, type Counts, type Entry, type Mess, type Period, type Person } from "../lib/domain";
 
 const auth = createAuthClient();
@@ -122,6 +122,13 @@ export default function Home() {
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save your changes."); return false; }
   };
   const [menuOpen, setMenuOpen] = useState(false);
+  const drawer = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const narrow = window.matchMedia("(max-width: 940px)");
+    const closeOnDesktop = () => { if (!narrow.matches) drawer.current?.close(); };
+    narrow.addEventListener("change", closeOnDesktop);
+    return () => narrow.removeEventListener("change", closeOnDesktop);
+  }, []);
   useEffect(() => {
     function syncPage() {
       const match = [...nav, ...accountNav].find(([name]) => pageHash(name) === window.location.hash);
@@ -133,7 +140,8 @@ export default function Home() {
   }, []);
   const go = (next: Page) => {
     if (window.location.hash !== pageHash(next)) window.location.hash = pageHash(next);
-    setPage(next); setMenuOpen(false); setFeedback(""); setError("");
+    drawer.current?.close();
+    setPage(next); setFeedback(""); setError("");
   };
   async function logout() {
     const result = await auth.signOut();
@@ -148,11 +156,23 @@ export default function Home() {
   const manager = !!user && mess?.manager === user.id;
   const can = (permission: "deposit" | "meal" | "expense") => manager || !!user?.permissions.includes(permission);
   const shortcuts = [nav[0], nav[2], nav[4], ...accountNav];
+  const navigation = <><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}>
+      <Icon size={19} />{item}</button>)}</nav><nav className="account-nav" aria-label="Account">{accountNav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}><Icon size={19} />{item}</button>)}</nav><button className="logout" onClick={logout}><LogOut size={18} /> Sign out</button></>;
   return <div className="shell">
-    <aside><div className="sidebar-header"><Brand />
-      <button type="button" className="mobile-menu secondary" aria-expanded={menuOpen} aria-controls="sidebar-links" onClick={() => setMenuOpen(open => !open)}>{menuOpen ? "Close menu" : "Menu"}</button>
-    </div><div id="sidebar-links" className="sidebar-links" data-open={menuOpen}><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}>
-      <Icon size={19} />{item}</button>)}</nav><nav className="account-nav" aria-label="Account">{accountNav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}><Icon size={19} />{item}</button>)}</nav><button className="logout" onClick={logout}><LogOut size={18} /> Sign out</button></div></aside>
+    <aside><div className="sidebar-header">
+      <button type="button" className="mobile-menu secondary" aria-label="Open menu" aria-haspopup="dialog" aria-expanded={menuOpen} aria-controls="workspace-drawer" onClick={() => {
+        drawer.current?.showModal();
+        setMenuOpen(true);
+      }}><Menu size={23} aria-hidden /></button>
+      <Brand />
+    </div><div className="sidebar-links">{navigation}</div></aside>
+    <dialog ref={drawer} id="workspace-drawer" className="workspace-drawer" aria-labelledby="drawer-title"
+      onClose={() => setMenuOpen(false)} onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
+      <div className="drawer-content">
+        <header><h2 id="drawer-title">Menu</h2><button type="button" className="secondary" aria-label="Close menu" autoFocus onClick={() => drawer.current?.close()}><X size={20} aria-hidden /></button></header>
+        <div className="sidebar-links">{navigation}</div>
+      </div>
+    </dialog>
     <main className="workspace">
       <header className="top"><div><p>{mess?.name ?? "Your workspace"}</p><h1>{mess ? page : "Set up AmarMess"}</h1></div>{user && <div className="identity"><span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span><div>{user.name}<small>{manager ? "Manager" : "Member"}</small></div></div>}</header>
       {error && <div role="alert" className="notice error">{error}</div>}
