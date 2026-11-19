@@ -121,6 +121,7 @@ export default function Home() {
       return true;
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save your changes."); return false; }
   };
+  const [menuOpen, setMenuOpen] = useState(false);
   const [mealTab, setMealTab] = useState<"record" | "requests">("record");
   useEffect(() => {
     function syncPage() {
@@ -133,7 +134,7 @@ export default function Home() {
   }, []);
   const go = (next: Page) => {
     if (window.location.hash !== pageHash(next)) window.location.hash = pageHash(next);
-    setPage(next); setFeedback(""); setError("");
+    setPage(next); setMenuOpen(false); setFeedback(""); setError("");
   };
   const openRequests = () => { setMealTab("requests"); go("Add Meal"); };
   async function logout() {
@@ -149,8 +150,10 @@ export default function Home() {
   const manager = !!user && mess?.manager === user.id;
   const can = (permission: "deposit" | "meal" | "expense") => manager || !!user?.permissions.includes(permission);
   return <div className="shell">
-    <aside><Brand /><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => { if (item === "Add Meal") setMealTab(can("meal") ? "record" : "requests"); go(item); }} aria-current={page === item ? "page" : undefined}>
-      <Icon size={19} />{item}</button>)}</nav><nav className="account-nav" aria-label="Account">{accountNav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}><Icon size={19} />{item}</button>)}</nav><button className="logout" onClick={logout}><LogOut size={18} /> Sign out</button></aside>
+    <aside><div className="sidebar-header"><Brand />
+      <button type="button" className="mobile-menu secondary" aria-expanded={menuOpen} aria-controls="sidebar-links" onClick={() => setMenuOpen(open => !open)}>{menuOpen ? "Close menu" : "Menu"}</button>
+    </div><div id="sidebar-links" className="sidebar-links" data-open={menuOpen}><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => { if (item === "Add Meal") setMealTab(can("meal") ? "record" : "requests"); go(item); }} aria-current={page === item ? "page" : undefined}>
+      <Icon size={19} />{item}</button>)}</nav><nav className="account-nav" aria-label="Account">{accountNav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}><Icon size={19} />{item}</button>)}</nav><button className="logout" onClick={logout}><LogOut size={18} /> Sign out</button></div></aside>
     <main className="workspace">
       <header className="top"><div><p>{mess?.name ?? "Your workspace"}</p><h1>{mess ? page : "Set up AmarMess"}</h1></div>{user && <div className="identity"><span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span><div>{user.name}<small>{manager ? "Manager" : "Member"}</small></div></div>}</header>
       {error && <div role="alert" className="notice error">{error}</div>}
