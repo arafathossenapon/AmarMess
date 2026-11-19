@@ -23,7 +23,7 @@ const permissions = z.array(z.enum(["deposit", "meal", "expense"])).max(3);
 const actions = z.discriminatedUnion("op", [
   z.object({ op: z.literal("setup"), name: title }),
   z.object({ op: z.literal("import"), ledger: importSchema }),
-  z.object({ op: z.literal("settings"), name: title, cutoff: z.iso.time({ precision: -1 }) }),
+  z.object({ op: z.literal("settings"), name: title }),
   z.object({ op: z.literal("period"), name: title, start: date, carry: z.boolean() }),
   z.object({ op: z.literal("rename"), name: title }),
   z.object({ op: z.literal("member"), name: title, email: z.email().max(254), phone: z.string().max(32).optional() }),
@@ -37,9 +37,6 @@ const actions = z.discriminatedUnion("op", [
   z.object({ op: z.literal("food"), date, cost: cash, shoppers: z.array(id).min(1), credit: z.boolean(), note: text }),
   z.object({ op: z.literal("shared"), date, cost: cash, members: z.array(id).min(1), note: text }),
   z.object({ op: z.literal("individual"), date, amounts: z.record(id, cash), note: text }),
-  z.object({ op: z.literal("request"), date, counts }),
-  z.object({ op: z.literal("auto"), enabled: z.boolean(), counts }),
-  z.object({ op: z.literal("review"), date, member: id, approve: z.boolean() }),
   z.object({ op: z.literal("removeEntry"), entry: id }),
 ]);
 class InputError extends Error {
@@ -110,7 +107,7 @@ api.all("/api/ledger", async (req, res) => {
       break;
     }
     case "setup": throw new InputError("The mess already exists.", 409);
-    case "settings": manage(); mess.name = a.name; mess.cutoff = a.cutoff; break;
+    case "settings": manage(); mess.name = a.name; break;
     case "rename": manage(); current().name = a.name; break;
     case "period": {
       manage();
@@ -187,36 +184,6 @@ api.all("/api/ledger", async (req, res) => {
       Object.keys(a.amounts).forEach(member);
       entry({ kind: "individual", date: a.date, note: a.note, amounts: a.amounts });
       break;
-    case "request": {
-      check(a.date >= current().start && a.date >= now.date, "Choose today or a future date in the active period.");
-      check(a.date > now.date || now.time < mess.cutoff, "Today's meal request deadline has passed.");
-      const existing = mess.requests.find(row => row.period === current().id && row.member === user.id && row.date === a.date);
-      check(existing?.status !== "approved", "The request is already approved.");
-      if (existing) Object.assign(existing, { counts: a.counts, status: "pending" });
-      else mess.requests.push({ member: user.id, date: a.date, counts: a.counts, status: "pending", period: current().id });
-      break;
-    }
-    case "auto": user.auto = a.enabled; user.defaults = a.counts; user.autoSince = now.time < mess.cutoff ? now.date : new Date(Date.parse(now.date) + 86400000).toISOString().slice(0, 10); break;
-    case "review": {
-      check(allows("meal"), "Meal permission required.", 403);
-      ledgerDate(a.date);
-      const person = member(a.member);
-      let request = mess.requests.find(row => row.period === current().id && row.member === a.member && row.date === a.date);
-      if (!request && a.date === now.date && person.auto && person.defaults && person.autoSince && person.autoSince <= a.date) {
-        request = { member: a.member, date: a.date, counts: person.defaults, period: current().id, status: "pending" };
-        mess.requests.push(request);
-      }
-      check(request?.status === "pending", "No pending request.");
-      if (a.approve) {
-        for (const row of current().entries) {
-          if (row.kind === "meal" && row.date === a.date && row.counts) delete row.counts[a.member];
-        }
-        current().entries = current().entries.filter(row => row.kind !== "meal" || Object.keys(row.counts ?? {}).length);
-        entry({ kind: "meal", date: a.date, counts: { [a.member]: request.counts } });
-      }
-      request.status = a.approve ? "approved" : "declined";
-      break;
-    }
     case "removeEntry":
       manage();
       check(current().entries.some(row => row.id === a.entry), "Entry not found.");

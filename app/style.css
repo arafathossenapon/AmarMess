@@ -26,7 +26,7 @@ aside { border-right: 1px solid var(--line); background: #eef0e7; padding: 28px 
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 1.35rem; letter-spacing: -.04em; }
 .brand span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--green); color: white; }
 aside .brand { padding-left: 8px; }
-.brand span, nav svg, .logout svg, .period-banner button svg { flex-shrink: 0; }
+.brand span, nav svg, .logout svg { flex-shrink: 0; }
 .sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sidebar-links { display: flex; flex: 1; flex-direction: column; gap: 16px; min-width: 0; }
 .mobile-menu { display: none; }
@@ -49,12 +49,6 @@ nav button[aria-current] { color: #174632; background: #dbe8d8; }
 .member-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
 .panel, .stat { border: 1px solid var(--line); border-radius: 15px; padding: clamp(16px, 2.1vw, 25px); min-width: 0; background: var(--surface); }
 .panel > p { margin-bottom: .8rem; overflow-wrap: anywhere; }
-.period-banner { background: #214b3b; color: white; min-height: 160px; border-radius: 17px; padding: clamp(20px, 3vw, 32px); display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
-.period-banner span { color: #cce7bd; font-size: .72rem; font-weight: 700; letter-spacing: .13em; }
-.period-banner > div { min-width: 0; overflow-wrap: anywhere; }
-.period-banner h2 { font-size: clamp(1.7rem, 4vw, 2.65rem); margin: 8px 0; }
-.period-banner p { color: #d5e5d8; }
-.period-banner button { display: flex; align-items: center; gap: 6px; border-radius: 8px; padding: 9px 12px; font-weight: 650; background: var(--lime); color: #224535; white-space: nowrap; }
 .stat svg { color: var(--green); margin-bottom: 12px; }
 .stat p { font-size: .86rem; }
 .stat strong { display: block; font-size: clamp(1.1rem, 2.5vw, 1.7rem); letter-spacing: -.04em; margin-top: 4px; overflow-wrap: anywhere; }
@@ -150,4 +144,31 @@ summary { cursor: pointer; margin-bottom: 8px; }
   .top { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 18px; }
   .identity { font-size: .875rem; }
   .avatar { flex-basis: 32px; height: 32px; }
+}
+
+.mobile-shortcuts { display: none; }
+.mess-summary { padding: 0; }
+.summary-header { background: #214b3b; color: white; padding: 16px 20px; border-radius: 14px 14px 0 0; display: flex; gap: 10px; justify-content: space-between; align-items: center; }
+.summary-header > div { min-width: 0; overflow-wrap: anywhere; }
+.summary-header h2 { margin: 0 0 4px; }
+.summary-header p { color: #d5e5d8; font-size: .82rem; }
+.summary-header span { background: #dceacd; color: #214b3b; border-radius: 999px; padding: 4px 9px; font-size: .72rem; font-weight: 700; }
+.summary-body { padding: 12px 20px 18px; }
+.summary-body dt { display: flex; align-items: center; gap: 8px; }
+.summary-body dt svg { flex-shrink: 0; color: var(--green); }
+.summary-link { display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; }
+.personal-summary h2 { margin-bottom: 10px; }
+.personal-summary .stat { background: #e5eee2; }
+.personal-summary .stat:nth-child(2) { background: #d9eee5; }
+.personal-summary .stat:nth-child(3) { background: #f1e8dd; }
+.personal-summary .stat:nth-child(4) { background: #edf0d8; }
+.personal-summary .stat svg { margin-bottom: 5px; }
+@media (max-width: 760px) {
+  .shell { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .mobile-shortcuts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; z-index: 3; inset: auto 0 0; padding: 4px 6px calc(4px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+  .mobile-shortcuts button { flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding: 5px 2px; font-size: clamp(.58rem, 2.65vw, .76rem); text-align: center; }
+  .summary-header, .summary-body { padding-inline: 14px; }
+  .summary-body dl > div { padding-block: 7px; }
+  .summary-body dt, .summary-body dd { font-size: .88rem; }
+  .personal-summary .stat { padding: 14px; }
 }

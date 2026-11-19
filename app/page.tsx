@@ -122,7 +122,6 @@ export default function Home() {
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save your changes."); return false; }
   };
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mealTab, setMealTab] = useState<"record" | "requests">("record");
   useEffect(() => {
     function syncPage() {
       const match = [...nav, ...accountNav].find(([name]) => pageHash(name) === window.location.hash);
@@ -136,7 +135,6 @@ export default function Home() {
     if (window.location.hash !== pageHash(next)) window.location.hash = pageHash(next);
     setPage(next); setMenuOpen(false); setFeedback(""); setError("");
   };
-  const openRequests = () => { setMealTab("requests"); go("Add Meal"); };
   async function logout() {
     const result = await auth.signOut();
     if (result.error) { setError(result.error.message ?? "Sign out failed."); return; }
@@ -149,10 +147,11 @@ export default function Home() {
   const period = mess ? activePeriod(mess) : undefined;
   const manager = !!user && mess?.manager === user.id;
   const can = (permission: "deposit" | "meal" | "expense") => manager || !!user?.permissions.includes(permission);
+  const shortcuts = [nav[0], nav[2], nav[4], ...accountNav];
   return <div className="shell">
     <aside><div className="sidebar-header"><Brand />
       <button type="button" className="mobile-menu secondary" aria-expanded={menuOpen} aria-controls="sidebar-links" onClick={() => setMenuOpen(open => !open)}>{menuOpen ? "Close menu" : "Menu"}</button>
-    </div><div id="sidebar-links" className="sidebar-links" data-open={menuOpen}><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => { if (item === "Add Meal") setMealTab(can("meal") ? "record" : "requests"); go(item); }} aria-current={page === item ? "page" : undefined}>
+    </div><div id="sidebar-links" className="sidebar-links" data-open={menuOpen}><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}>
       <Icon size={19} />{item}</button>)}</nav><nav className="account-nav" aria-label="Account">{accountNav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}><Icon size={19} />{item}</button>)}</nav><button className="logout" onClick={logout}><LogOut size={18} /> Sign out</button></div></aside>
     <main className="workspace">
       <header className="top"><div><p>{mess?.name ?? "Your workspace"}</p><h1>{mess ? page : "Set up AmarMess"}</h1></div>{user && <div className="identity"><span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span><div>{user.name}<small>{manager ? "Manager" : "Member"}</small></div></div>}</header>
@@ -161,7 +160,7 @@ export default function Home() {
       {!mess ? <Panel title="Create your mess"><Form save={save} label="Create mess" action={form => ({ op: "setup", name: str(form, "name") })}>
         <Field label="Mess name"><input name="name" required minLength={2} maxLength={90} /></Field>
       </Form></Panel> : user && <>
-        {page === "Home" && <Overview mess={mess} period={period} user={user} save={save} go={go} openRequests={openRequests} />}
+        {page === "Home" && <Overview mess={mess} period={period} user={user} save={save} go={go} />}
         {(page === "Active Month Details" || page === "All Month Details") && <Periods key={page} mess={mess} manager={manager} archive={page === "All Month Details"} save={save} />}
         {page === "Start New Month" && <StartMonth period={period} manager={manager} save={save} onStarted={() => go("Active Month Details")} />}
         {page === "Change Manager" && <ChangeManager mess={mess} user={user} manager={manager} save={save} />}
@@ -174,19 +173,21 @@ export default function Home() {
           ? <Form save={save} label="Add deposit" action={f => ({ op: "deposit", date: str(f, "date"), member: str(f, "member"), amount: number(f.get("amount")), note: str(f, "note") })}>
             <DateField min={period.start} max={dhakaNow().date} /><MemberSelect people={mess.people} /><MoneyField signed /><Notes />
           </Form> : <p>{period ? "A manager or member with deposit permission can record deposits." : "Start an accounting period to record deposits."}</p>}</Panel>}
-        {page === "Add Meal" && (period ? <Meals mess={mess} period={period} user={user} canWrite={can("meal")} tab={mealTab} setTab={setMealTab} save={save} /> : <Panel title="Meals"><p>Start an accounting period to record meals.</p></Panel>)}
+        {page === "Add Meal" && (period && can("meal") ? <Meals mess={mess} period={period} save={save} /> : <Panel title="Meals"><p>{period ? "Meal entry is available to the manager and members with meal permission." : "Start an accounting period to record meals."}</p></Panel>)}
         {page === "Add Cost" && (period && can("expense") ? <Expenses mess={mess} period={period} save={save} /> : <Panel title="Expenses"><p>{period ? "A manager or member with expense permission can record costs." : "Start an accounting period to record expenses."}</p></Panel>)}
       </>}
     </main>
+    {mess && user && <nav className="mobile-shortcuts" aria-label="Quick navigation">
+      {shortcuts.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}>
+        <Icon size={20} aria-hidden /><span>{item === "Active Month Details" ? "Ledger" : item === "Add Meal" ? "Meals" : item}</span>
+      </button>)}
+    </nav>}
   </div>;
 }
-function Overview({ mess, period, user, save, go, openRequests }: { mess: Mess; period?: Period; user: Person; save: Save; go: (page: Page) => void; openRequests: () => void }) {
+function Overview({ mess, period, user, save, go }: { mess: Mess; period?: Period; user: Person; save: Save; go: (page: Page) => void }) {
   if (!period) return <Panel title="Your ledger is ready"><p>Start an accounting period to track meals and expenses.</p><button className="primary" onClick={() => go("All Month Details")}>View accounting periods</button></Panel>;
   const { members, totals } = summarize(period, mess.people);
   const mine = members[user.id];
-  const today = dhakaNow().date;
-  const todayCounts = mess.requests.find(row => row.period === period.id && row.date === today && row.member === user.id)?.counts
-    ?? (user.auto && user.autoSince && user.autoSince <= today ? user.defaults : undefined) ?? zero;
   const stats = [
     { name: "Your meals", value: quantity(mine.meals), Icon: Soup },
     { name: "Your deposits", value: money(mine.deposits), Icon: Wallet },
@@ -194,17 +195,27 @@ function Overview({ mess, period, user, save, go, openRequests }: { mess: Mess; 
     { name: "Your balance", value: money(mine.balance), Icon: CircleDollarSign },
   ];
   return <div className="stack">
-    <div className="dashboard-grid"><div className="stack"><div className="period-banner"><div><span>ACTIVE PERIOD</span><h2>{period.name}</h2><p>Started {formatDate(period.start)}</p></div><button onClick={() => go("Active Month Details")}>View ledger <ArrowUpRight size={16} /></button></div>
-    <Panel title="Mess summary"><dl>{Object.entries({
-      "Cash balance": money(totals.balance), "Opening balance": money(totals.opening), "Total deposits": money(totals.deposits),
-      "Total meals": quantity(totals.meals), "Meal costs": money(totals.food), "Meal rate": totals.meals ? money(totals.rate) : "Pending meals",
-      "Individual costs": money(totals.individual), "Shared costs": money(totals.shared),
-    }).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></Panel></div>
-      <div className="stack">    <div className="stats" aria-label="My summary">{stats.map(({ name, value, Icon }) => <div className="stat" key={name}><Icon size={19} /><p>{name}</p><strong>{value}</strong></div>)}</div>
-      <Panel title="My meal request"><dl>{slots.map(slot => <div key={slot}><dt>{labels[slot]}</dt><dd>{quantity(todayCounts[slot])}</dd></div>)}</dl>
-        <p>Daily cutoff at {mess.cutoff} Dhaka time · Automatic requests {user.auto ? "on" : "off"}</p>
-        <button className="secondary" onClick={openRequests}>View or edit request</button></Panel>
-        <Panel title="Your bazar dates"><BazarDates mess={mess} period={period} person={user} editable save={save} /></Panel></div>
+    <div className="dashboard-grid">
+      <section className="panel mess-summary">
+        <header className="summary-header"><div><h2>{period.name}</h2><p>{mess.name} · Started {formatDate(period.start)}</p></div><span>Active</span></header>
+        <div className="summary-body"><dl>{[
+          { label: "Mess balance", value: money(totals.balance), Icon: Wallet },
+          { label: "Opening balance", value: money(totals.opening), Icon: Wallet, hidden: !totals.opening },
+          { label: "Total deposits", value: money(totals.deposits), Icon: CircleDollarSign },
+          { label: "Total meals", value: quantity(totals.meals), Icon: Soup },
+          { label: "Meal costs", value: money(totals.food), Icon: ShoppingBasket },
+          { label: "Meal rate", value: totals.meals ? money(totals.rate) : "Pending meals", Icon: CircleDollarSign },
+          { label: "Individual costs", value: money(totals.individual), Icon: UserRound },
+          { label: "Shared costs", value: money(totals.shared), Icon: Users },
+        ].filter(row => !row.hidden).map(({ label, value, Icon }) => <div key={label}><dt><Icon size={16} aria-hidden />{label}</dt><dd>{value}</dd></div>)}</dl>
+        <button className="secondary summary-link" onClick={() => go("Active Month Details")}>View ledger <ArrowUpRight size={16} aria-hidden /></button></div>
+      </section>
+      <div className="stack">
+        <section className="personal-summary"><h2>My summary</h2>
+          <div className="stats">{stats.map(({ name, value, Icon }) => <div className="stat" key={name}><Icon size={19} aria-hidden /><strong>{value}</strong><p>{name}</p></div>)}</div>
+        </section>
+        <Panel title="My bazar dates"><BazarDates mess={mess} period={period} person={user} editable save={save} /></Panel>
+      </div>
     </div>
     <section><h2>All members · {mess.people.length}</h2><div className="member-grid">{mess.people.map(person => {
       const row = members[person.id];
@@ -229,46 +240,19 @@ function Balances({ mess, period }: { mess: Mess; period: Period }) {
       {[row.opening, row.deposits, row.food, row.individual, row.shared, row.expense].map((item, index) => <td key={index}>{money(item)}</td>)}
       <td className={row.balance < 0 ? "negative" : "positive"}>{money(row.balance)}</td></tr>; })}</tbody></table></div>;
 }
-function Meals({ mess, period, user, canWrite, tab, setTab, save }: { mess: Mess; period: Period; user: Person; canWrite: boolean; tab: "record" | "requests"; setTab: (tab: "record" | "requests") => void; save: Save }) {
+function Meals({ mess, period, save }: { mess: Mess; period: Period; save: Save }) {
   const today = dhakaNow().date;
   const [day, setDay] = useState(today);
   const [who, setWho] = useState("all");
-  const [requestDay, setRequestDay] = useState(today);
-  const recording = canWrite && tab === "record";
   const selected = mess.people.filter(person => who === "all" || person.id === who);
   const currentCounts = Object.assign({}, ...period.entries.filter(row => row.kind === "meal" && row.date === day).map(row => row.counts));
-  const requests = mess.requests.filter(row => row.period === period.id);
-  const own = requests.filter(row => row.member === user.id);
-  const suggested = mess.people.filter(person => person.auto && person.defaults && person.autoSince && person.autoSince <= today && !requests.some(row => row.member === person.id && row.date === today))
-    .map(person => ({ member: person.id, date: today, counts: person.defaults!, status: "pending", automatic: true }));
-  const queue = [...requests.filter(row => row.status === "pending"), ...suggested];
-  return <div className="stack">
-    {canWrite && <div className="tabs" aria-label="Meal options"><button aria-pressed={recording} onClick={() => setTab("record")}>Add Meal</button><button aria-pressed={!recording} onClick={() => setTab("requests")}>Meal Request</button></div>}
-    {recording && <Panel title="Record daily meals">
+  return <Panel title="Record daily meals">
       <div className="meal-fields"><Field label="Date"><input type="date" value={day} min={period.start} max={today} onChange={event => setDay(event.target.value)} /></Field>
         <Field label="Members"><select value={who} onChange={event => setWho(event.target.value)}><option value="all">All members</option>{mess.people.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}</select></Field></div>
       <Form key={day + who + JSON.stringify(currentCounts)} save={save} label="Add meal" action={f => ({ op: "meal", date: day, counts: Object.fromEntries(selected.map(person => [person.id, values(f, person.id)])) })}>
         {selected.map(person => <div className="subrow" key={person.id}><h3>{person.name}</h3><MealFields prefix={person.id} counts={currentCounts[person.id]} /></div>)}
       </Form>
-    </Panel>}
-    {!recording && <><div className="columns"><Panel title="Request a meal">
-      <p>Today's requests close at {mess.cutoff} Dhaka time.</p>
-      <Form save={save} label="Submit request" action={f => ({ op: "request", date: str(f, "date"), counts: values(f) })}>
-        <Field label="Date"><input name="date" type="date" required value={requestDay} min={today} onChange={event => setRequestDay(event.target.value)} /></Field>
-        <MealFields key={requestDay + JSON.stringify(own.find(row => row.date === requestDay)?.counts)} counts={own.find(row => row.date === requestDay)?.counts} />
-      </Form>
-      {own.length > 0 && <ul className="compact">{own.sort((a, b) => b.date.localeCompare(a.date)).map(row => <li key={row.date}>{formatDate(row.date)} · {quantity(totalMeals(row.counts))} meals · {row.status}</li>)}</ul>}
-    </Panel><Panel title="Automatic meal requests">
-      <p>Use default meal quantities for today's manager review when you have no manual request.</p>
-      <Form key={JSON.stringify(user.defaults) + user.auto} save={save} label="Save defaults" action={f => ({ op: "auto", enabled: f.has("enabled"), counts: values(f) })}>
-        <Check name="enabled" checked={user.auto}>Enable automatic requests</Check><MealFields counts={user.defaults} />
-      </Form>
-    </Panel></div>
-    {canWrite && <Panel title="Review meal requests">{queue.length ? <ul className="compact">{queue.map(row => <li key={row.member + row.date}>
-      <strong>{nameOf(mess, row.member)}</strong> · {formatDate(row.date)} · {slots.map(slot => labels[slot] + " " + quantity(row.counts[slot])).join(" · ")}
-      <div className="actions">{[true, false].map(approve => <button key={String(approve)} className="secondary" disabled={row.date > today} onClick={() => save({ op: "review", date: row.date, member: row.member, approve })}>{approve ? "Approve" : "Decline"}</button>)}</div>
-    </li>)}</ul> : <p>No pending requests.</p>}</Panel>}</>}
-  </div>;
+  </Panel>;
 }
 function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Save }) {
   const [type, setType] = useState<"food" | "shared" | "individual">("food");
@@ -422,11 +406,10 @@ function Members({ mess, period, user, manager, save }: { mess: Mess; period?: P
   </div>;
 }
 function SettingsPage({ mess, manager, save }: { mess: Mess; manager: boolean; save: Save }) {
-  if (!manager) return <Panel title="Mess settings"><p>Meal request cutoff is {mess.cutoff} Dhaka time.</p></Panel>;
+  if (!manager) return <Panel title="Mess settings"><p>Only the manager can edit mess settings.</p></Panel>;
   return <div className="columns">
-    <Panel title="Mess preferences"><Form save={save} label="Save settings" action={f => ({ op: "settings", name: str(f, "name"), cutoff: str(f, "cutoff") })}>
+    <Panel title="Mess preferences"><Form save={save} label="Save settings" action={f => ({ op: "settings", name: str(f, "name") })}>
       <Field label="Mess name"><input name="name" required minLength={2} maxLength={90} defaultValue={mess.name} /></Field>
-      <Field label="Meal request cutoff (Dhaka time)"><input name="cutoff" type="time" required defaultValue={mess.cutoff} /></Field>
     </Form></Panel>
     {mess.people.length === 1 && mess.periods.length <= 1 && mess.periods.every(period => !period.entries.length) && <Panel title="Import an existing ledger">
       <Form save={async payload => {
