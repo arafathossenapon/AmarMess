@@ -1,7 +1,7 @@
 import express from "express";
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { auth, createMess, readMess, writeMess } from "../../lib/store";
+import { auth, createMess, issueMemberReset, readMess, writeMess } from "../../lib/store";
 import { importLedger, importSchema } from "../../lib/ledger-import";
 import { hashCode } from "../../lib/invite";
 import { activePeriod, dhakaNow, split, summarize, type Entry, type Mess, type Permission } from "../../lib/domain";
@@ -29,6 +29,7 @@ const actions = z.discriminatedUnion("op", [
   z.object({ op: z.literal("member"), name: title, email: z.email().max(254), phone: z.string().max(32).optional() }),
   z.object({ op: z.literal("permissions"), member: id, permissions }),
   z.object({ op: z.literal("manager"), member: id }),
+  z.object({ op: z.literal("memberReset"), member: id }),
   z.object({ op: z.literal("profile"), name: title, phone: z.string().max(32) }),
   z.object({ op: z.literal("delete"), name: title }),
   z.object({ op: z.literal("bazar"), member: id, date, remove: z.boolean() }),
@@ -76,7 +77,8 @@ api.all("/api/ledger", async (req, res) => {
     const clientSession = session.user.createdAt;
     check(!user.joinedAfter || new Date(clientSession).toISOString() >= user.joinedAfter, "This account predates the current invitation.", 403);
   }
-  if (req.method === "GET") return res.json({ mess: publicMess(mess), member: user.id, user: session.user });
+  const owner = email === process.env.MESS_SETUP_EMAIL?.trim().toLowerCase();
+  if (req.method === "GET") return res.json({ mess: publicMess(mess), member: user.id, owner, user: session.user });
   check(req.method === "POST", "Method not allowed.", 405);
   const a = actions.parse(req.body);
   const manager = mess.manager === user.id;
@@ -134,6 +136,15 @@ api.all("/api/ledger", async (req, res) => {
       break;
     }
     case "permissions": manage(); member(a.member).permissions = [...new Set(a.permissions)]; break;
+    case "memberReset": {
+      check(owner, "Only the owner can issue password reset codes.", 403);
+      check(req.get("origin") === new URL(process.env.BETTER_AUTH_URL!).origin, "Invalid request origin.", 403);
+      const target = member(a.member);
+      check(target.id !== user.id, "Use Profile to change your own password.");
+      const resetCode = await issueMemberReset(target.email, target.joinedAfter);
+      check(resetCode, "This member has no activated password account.");
+      return res.json({ resetCode });
+    }
     case "manager": manage(); mess.manager = member(a.member).id; break;
     case "profile": user.name = a.name; user.phone = a.phone; break;
     case "delete":

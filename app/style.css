@@ -181,3 +181,12 @@ html:has(.workspace-drawer[open]) { overflow: hidden; }
 .drawer-content header button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; }
 @keyframes drawer-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
 @media (prefers-reduced-motion: reduce) { .workspace-drawer[open] { animation: none; } }
+
+.activity-feed { max-width: 720px; margin-inline: auto; }
+.activity-feed ul { display: grid; gap: 10px; margin-bottom: 14px; }
+.activity-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow-wrap: anywhere; }
+.activity-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; color: var(--green); background: #ede9df; }
+.activity-icon[data-kind="meal"] { background: #e9e7f3; }
+.activity-icon[data-kind="deposit"] { background: #d9eee5; }
+.activity-card .activity-message { color: var(--ink); font-weight: 650; }
+.activity-card footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 8px; color: var(--muted); font-size: .8rem; }

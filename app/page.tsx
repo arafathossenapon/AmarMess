@@ -61,6 +61,8 @@ function Form({ children, label, action, save, danger }: { children: ReactNode; 
 }
 function Login({ onLogin, error, setError }: { onLogin: () => Promise<void>; error: string; setError: (error: string) => void }) {
   const [register, setRegister] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
   const [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,17 +79,39 @@ function Login({ onLogin, error, setError }: { onLogin: () => Promise<void>; err
     } catch { setError("Unable to reach the account service."); }
     finally { setBusy(false); }
   }
+  async function resetPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const password = str(form, "password");
+    if (password !== str(form, "confirm")) { setError("Passwords do not match."); return; }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await auth.resetPassword({ token: str(form, "code").trim(), newPassword: password });
+      if (result.error) setError("The reset could not be completed. Check your code or ask the owner for a new one.");
+      else { setResetting(false); setResetDone(true); }
+    } catch { setError("Unable to reach the account service."); }
+    finally { setBusy(false); }
+  }
   return <div className="login"><div className="login-intro"><Brand /><h1>Manage meals.<br />Settle expenses.</h1><p>Track your mess's meals, deposits, and shared expenses in one place.</p><Soup size={130} strokeWidth={1} aria-hidden /></div>
-    <div className="login-form"><Panel title={register ? "Activate your account" : "Sign in"}>
+    <div className="login-form"><Panel title={resetting ? "Reset password" : register ? "Activate your account" : "Sign in"}>
       {error && <p role="alert" className="notice error">{error}</p>}
-      <form onSubmit={submit}>
+      {resetDone && !resetting && <p role="status" className="notice">Password reset. Sign in with your new password.</p>}
+      {resetting ? <form onSubmit={resetPassword}>
+        <Field label="Owner reset code"><input name="code" required autoComplete="off" /></Field>
+        <Field label="New password"><input name="password" type="password" required minLength={10} maxLength={128} autoComplete="new-password" /></Field>
+        <Field label="Confirm password"><input name="confirm" type="password" required minLength={10} maxLength={128} autoComplete="new-password" /></Field>
+        <button className="primary" disabled={busy}>Reset password</button>
+      </form> : <form onSubmit={submit}>
         {register && <Field label="Name"><input name="name" required minLength={2} maxLength={90} autoComplete="name" /></Field>}
         <Field label="Email"><input name="email" required type="email" autoComplete="email" /></Field>
         <Field label="Password"><input name="password" required type="password" minLength={register ? 10 : undefined} autoComplete={register ? "new-password" : "current-password"} /></Field>
         {register && <Field label="Invitation code"><input name="code" required autoComplete="off" /></Field>}
         <button className="primary" disabled={busy}>{register ? "Create account" : "Sign in"}</button>
-      </form>
-      <button className="text-button" onClick={() => { setRegister(!register); setError(""); }}>{register ? "Back to sign in" : "I have an invitation code"}</button>
+      </form>}
+      {resetting ? <button className="text-button" onClick={() => { setResetting(false); setError(""); }}>Back to sign in</button>
+        : <div className="actions"><button className="text-button" onClick={() => { setRegister(!register); setError(""); }}>{register ? "Back to sign in" : "I have an invitation code"}</button>
+          {!register && <button className="text-button" onClick={() => { setResetting(true); setError(""); setResetDone(false); }}>Use an owner reset code</button>}</div>}
     </Panel></div></div>;
 }
 function Brand() {
@@ -95,7 +119,7 @@ function Brand() {
 }
 export default function Home() {
   const [page, setPage] = useState<Page>("Home");
-  const [state, setState] = useState<{ mess: Mess | null; member?: string; user?: { email: string } } | null>(null);
+  const [state, setState] = useState<{ mess: Mess | null; member?: string; owner?: boolean; user?: { email: string } } | null>(null);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [loading, setLoading] = useState(true);
@@ -116,6 +140,10 @@ export default function Home() {
       const response = await fetch("/api/ledger", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
+      if (data.resetCode) {
+        setFeedback("Owner reset code (valid for 15 minutes): " + data.resetCode);
+        return true;
+      }
       setState(previous => ({ ...previous, ...data }));
       setFeedback(data.invitation ? "Invitation code (share privately): " + data.invitation : "Changes saved.");
       return true;
@@ -185,7 +213,7 @@ export default function Home() {
         {page === "Start New Month" && <StartMonth period={period} manager={manager} save={save} onStarted={() => go("Active Month Details")} />}
         {page === "Change Manager" && <ChangeManager mess={mess} user={user} manager={manager} save={save} />}
         {page === "Delete Mess" && <DeleteMess mess={mess} manager={manager} save={save} />}
-        {page === "Mess Members" && <Members mess={mess} period={period} user={user} manager={manager} save={save} />}
+        {page === "Mess Members" && <Members mess={mess} period={period} user={user} manager={manager} owner={!!state.owner} save={save} />}
         {page === "Mess Settings" && <SettingsPage mess={mess} manager={manager} save={save} />}
         {page === "Profile" && <Profile user={user} save={save} />}
         {page === "Notifications" && <Activity mess={mess} user={user} />}
@@ -405,7 +433,7 @@ function ChangeManager({ mess, user, manager, save }: { mess: Mess; user: Person
     </Form> : <p>Invite a member before transferring access.</p>}
   </Panel>;
 }
-function Members({ mess, period, user, manager, save }: { mess: Mess; period?: Period; user: Person; manager: boolean; save: Save }) {
+function Members({ mess, period, user, manager, owner, save }: { mess: Mess; period?: Period; user: Person; manager: boolean; owner: boolean; save: Save }) {
   const [adding, setAdding] = useState(false);
   return <div className="stack">
     {manager && <div className="tabs"><button aria-pressed={!adding} onClick={() => setAdding(false)}>All Members List</button>
@@ -421,6 +449,7 @@ function Members({ mess, period, user, manager, save }: { mess: Mess; period?: P
       {mess.manager !== person.id && <><h3>Permissions</h3>{manager ? <Form key={person.permissions.join(",")} save={save} label="Save permissions" action={f => ({ op: "permissions", member: person.id, permissions: f.getAll("permission") })}>
         {(["deposit", "meal", "expense"] as const).map(permission => <Check name="permission" key={permission} value={permission} checked={person.permissions.includes(permission)}>Record {permission}s</Check>)}
       </Form> : <p>{person.permissions.join(", ") || "Standard member access"}</p>}</>}
+      {owner && person.id !== user.id && <button className="secondary" onClick={() => void save({ op: "memberReset", member: person.id })}>Generate password reset code</button>}
       <h3>Bazar dates</h3><BazarDates mess={mess} period={period} person={person} editable={manager || user.id === person.id} save={save} />
     </Panel>)}</div>}
   </div>;
@@ -475,10 +504,31 @@ function Profile({ user, save }: { user: Person; save: Save }) {
   </form></Panel></div>;
 }
 function Activity({ mess, user }: { mess: Mess; user: Person }) {
-  const updates = mess.periods.flatMap(period => period.entries).filter(row => row.kind === "food" || user.id in (row.amounts ?? {}) || user.id in (row.counts ?? {}))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return <Panel title="Recent activity">{updates.length ? <ul className="compact">{updates.slice(0, 50).map(row => <li key={row.id}>
-    <strong>{kindLabels[row.kind]}</strong> · {formatDate(row.date)} <small>Recorded by {nameOf(mess, row.actor)}</small>
-    {entryDetails(mess, row.kind === "meal" ? { ...row, counts: { [user.id]: row.counts![user.id] } } : row).map((detail, i) => <div key={i}>{detail}</div>)}
-  </li>)}</ul> : <p>Meal, deposit and expense updates will appear here.</p>}</Panel>;
+  const [limit, setLimit] = useState(12);
+  const updates = mess.periods.flatMap(period => period.entries)
+    .filter(row => row.kind === "food" || user.id in (row.amounts ?? {}) || user.id in (row.counts ?? {}))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.date.localeCompare(a.date));
+  return <section className="activity-feed" aria-label="Recent activity">
+    {updates.length ? <ul>{updates.slice(0, limit).map(row => {
+      const ownAmount = row.amounts?.[user.id] ?? 0;
+      const ownCredit = row.credits?.[user.id] ?? 0;
+      const Icon = row.kind === "meal" ? Soup : row.kind === "deposit" ? Wallet : ShoppingBasket;
+      const message = {
+        meal: () => quantity(totalMeals(row.counts?.[user.id] ?? zero)) + " meals recorded for you",
+        deposit: () => money(Math.abs(ownAmount)) + (ownAmount < 0 ? " deducted from your deposits" : " added to your deposits"),
+        food: () => money(row.cost ?? 0) + (row.shoppers?.includes(user.id) ? " spent on a bazar you shopped for" : " recorded as meal cost"),
+        shared: () => money(ownAmount) + " charged to you for a shared expense",
+        individual: () => money(ownAmount) + " charged to you for an individual expense",
+      }[row.kind]();
+      return <li className="activity-card" key={row.id}>
+        <div className="activity-icon" data-kind={row.kind}><Icon size={22} aria-hidden /></div>
+        <div><p className="activity-message">{message}</p>
+          {row.note && <p>{row.note}</p>}
+          {ownCredit > 0 && <p>{money(ownCredit)} credited to your deposits</p>}
+          <footer><span>{kindLabels[row.kind]} · {nameOf(mess, row.actor)}</span><time dateTime={row.date}>{formatDate(row.date)}</time></footer>
+        </div>
+      </li>;
+    })}</ul> : <p>No meal, deposit or expense updates to show.</p>}
+    {updates.length > limit && <button className="secondary" onClick={() => setLimit(limit + 12)}>Load more</button>}
+  </section>;
 }

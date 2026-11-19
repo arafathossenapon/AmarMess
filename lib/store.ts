@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { MongoClient } from "mongodb";
@@ -21,7 +22,7 @@ function makeAuth() {
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
     database: mongodbAdapter(client.db(database()), { client, transaction: false }),
-    emailAndPassword: { enabled: true, minPasswordLength: 10 },
+    emailAndPassword: { enabled: true, minPasswordLength: 10, revokeSessionsOnPasswordReset: true },
 
     databaseHooks: {
       user: { create: { before: async (user, context) => {
@@ -38,6 +39,19 @@ function makeAuth() {
   });
 }
 export const auth = () => globalDb.messAuth ??= makeAuth();
+export async function issueMemberReset(email: string, joinedAfter?: string) {
+  const { internalAdapter } = await auth().$context;
+  const account = await internalAdapter.findUserByEmail(email, { includeAccounts: true });
+  if (!account?.accounts.some(item => item.providerId === "credential") ||
+      (joinedAfter && account.user.createdAt.toISOString() < joinedAfter)) return null;
+  const code = randomBytes(24).toString("base64url");
+  await internalAdapter.createVerificationValue({
+    identifier: "reset-password:" + code,
+    value: account.user.id,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+  });
+  return code;
+}
 const schema = new mongoose.Schema({
   _id: String,
   revision: { type: Number, required: true },
