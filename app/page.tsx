@@ -7,10 +7,13 @@ import { activePeriod, dhakaNow, kindLabels, money, quantity, slots, summarize, 
 
 const auth = createAuthClient();
 const nav = [
-  ["Overview", LayoutDashboard], ["Deposits", Wallet], ["Meals", Soup], ["Expenses", ShoppingBasket],
-  ["Periods", CalendarDays], ["Members", Users], ["Activity", Bell], ["Settings", Settings], ["Profile", UserRound],
+  ["Home", LayoutDashboard], ["Add Deposit", Wallet], ["Add Meal", Soup], ["Add Cost", ShoppingBasket],
+  ["Active Month Details", CalendarDays], ["All Month Details", CalendarDays], ["Start New Month", CalendarDays],
+  ["Mess Members", Users], ["Change Manager", UserRound], ["Mess Settings", Settings], ["Delete Mess", Settings],
 ] as const;
-type Page = typeof nav[number][0];
+const accountNav = [["Notifications", Bell], ["Profile", UserRound]] as const;
+type Page = typeof nav[number][0] | typeof accountNav[number][0];
+const pageHash = (page: Page) => "#" + page.toLowerCase().replaceAll(" ", "-");
 type Payload = Record<string, unknown>;
 type Save = (payload: Payload) => Promise<boolean>;
 const number = (value: FormDataEntryValue | null) => Math.round(Number(value ?? 0) * 100);
@@ -91,7 +94,7 @@ function Brand() {
   return <div className="brand"><span><Soup size={23} /></span> AmarMess</div>;
 }
 export default function Home() {
-  const [page, setPage] = useState<Page>("Overview");
+  const [page, setPage] = useState<Page>("Home");
   const [state, setState] = useState<{ mess: Mess | null; member?: string; user?: { email: string } } | null>(null);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -118,11 +121,25 @@ export default function Home() {
       return true;
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save your changes."); return false; }
   };
-  const go = (next: Page) => { setPage(next); setFeedback(""); setError(""); };
+  const [mealTab, setMealTab] = useState<"record" | "requests">("record");
+  useEffect(() => {
+    function syncPage() {
+      const match = [...nav, ...accountNav].find(([name]) => pageHash(name) === window.location.hash);
+      setPage(match?.[0] ?? "Home");
+    }
+    syncPage();
+    window.addEventListener("hashchange", syncPage);
+    return () => window.removeEventListener("hashchange", syncPage);
+  }, []);
+  const go = (next: Page) => {
+    if (window.location.hash !== pageHash(next)) window.location.hash = pageHash(next);
+    setPage(next); setFeedback(""); setError("");
+  };
+  const openRequests = () => { setMealTab("requests"); go("Add Meal"); };
   async function logout() {
     const result = await auth.signOut();
     if (result.error) { setError(result.error.message ?? "Sign out failed."); return; }
-    setState(null); go("Overview");
+    setState(null); go("Home");
   }
   if (loading) return <main className="loading"><Brand /><p>Loading workspace…</p></main>;
   if (!state) return <Login onLogin={load} error={error} setError={setError} />;
@@ -132,8 +149,8 @@ export default function Home() {
   const manager = !!user && mess?.manager === user.id;
   const can = (permission: "deposit" | "meal" | "expense") => manager || !!user?.permissions.includes(permission);
   return <div className="shell">
-    <aside><Brand /><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}>
-      <Icon size={19} />{item}</button>)}</nav><button className="logout" onClick={logout}><LogOut size={18} /> Sign out</button></aside>
+    <aside><Brand /><nav aria-label="Workspace">{nav.map(([item, Icon]) => <button key={item} onClick={() => { if (item === "Add Meal") setMealTab(can("meal") ? "record" : "requests"); go(item); }} aria-current={page === item ? "page" : undefined}>
+      <Icon size={19} />{item}</button>)}</nav><nav className="account-nav" aria-label="Account">{accountNav.map(([item, Icon]) => <button key={item} onClick={() => go(item)} aria-current={page === item ? "page" : undefined}><Icon size={19} />{item}</button>)}</nav><button className="logout" onClick={logout}><LogOut size={18} /> Sign out</button></aside>
     <main className="workspace">
       <header className="top"><div><p>{mess?.name ?? "Your workspace"}</p><h1>{mess ? page : "Set up AmarMess"}</h1></div>{user && <div className="identity"><span className="avatar">{user.name.slice(0, 1).toUpperCase()}</span><div>{user.name}<small>{manager ? "Manager" : "Member"}</small></div></div>}</header>
       {error && <div role="alert" className="notice error">{error}</div>}
@@ -141,26 +158,32 @@ export default function Home() {
       {!mess ? <Panel title="Create your mess"><Form save={save} label="Create mess" action={form => ({ op: "setup", name: str(form, "name") })}>
         <Field label="Mess name"><input name="name" required minLength={2} maxLength={90} /></Field>
       </Form></Panel> : user && <>
-        {page === "Overview" && <Overview mess={mess} period={period} user={user} save={save} go={go} />}
-        {page === "Periods" && <Periods mess={mess} manager={manager} save={save} />}
-        {page === "Members" && <Members mess={mess} period={period} user={user} manager={manager} save={save} />}
-        {page === "Settings" && <SettingsPage mess={mess} manager={manager} save={save} />}
+        {page === "Home" && <Overview mess={mess} period={period} user={user} save={save} go={go} openRequests={openRequests} />}
+        {(page === "Active Month Details" || page === "All Month Details") && <Periods key={page} mess={mess} manager={manager} archive={page === "All Month Details"} save={save} />}
+        {page === "Start New Month" && <StartMonth period={period} manager={manager} save={save} onStarted={() => go("Active Month Details")} />}
+        {page === "Change Manager" && <ChangeManager mess={mess} user={user} manager={manager} save={save} />}
+        {page === "Delete Mess" && <DeleteMess mess={mess} manager={manager} save={save} />}
+        {page === "Mess Members" && <Members mess={mess} period={period} user={user} manager={manager} save={save} />}
+        {page === "Mess Settings" && <SettingsPage mess={mess} manager={manager} save={save} />}
         {page === "Profile" && <Profile user={user} save={save} />}
-        {page === "Activity" && <Activity mess={mess} user={user} />}
-        {page === "Deposits" && <Panel title="Record a deposit">{period && can("deposit")
+        {page === "Notifications" && <Activity mess={mess} user={user} />}
+        {page === "Add Deposit" && <Panel title="Record a deposit">{period && can("deposit")
           ? <Form save={save} label="Add deposit" action={f => ({ op: "deposit", date: str(f, "date"), member: str(f, "member"), amount: number(f.get("amount")), note: str(f, "note") })}>
             <DateField min={period.start} max={dhakaNow().date} /><MemberSelect people={mess.people} /><MoneyField signed /><Notes />
           </Form> : <p>{period ? "A manager or member with deposit permission can record deposits." : "Start an accounting period to record deposits."}</p>}</Panel>}
-        {page === "Meals" && (period ? <Meals mess={mess} period={period} user={user} canWrite={can("meal")} save={save} /> : <Panel title="Meals"><p>Start an accounting period to record meals.</p></Panel>)}
-        {page === "Expenses" && (period && can("expense") ? <Expenses mess={mess} period={period} save={save} /> : <Panel title="Expenses"><p>{period ? "A manager or member with expense permission can record costs." : "Start an accounting period to record expenses."}</p></Panel>)}
+        {page === "Add Meal" && (period ? <Meals mess={mess} period={period} user={user} canWrite={can("meal")} tab={mealTab} setTab={setMealTab} save={save} /> : <Panel title="Meals"><p>Start an accounting period to record meals.</p></Panel>)}
+        {page === "Add Cost" && (period && can("expense") ? <Expenses mess={mess} period={period} save={save} /> : <Panel title="Expenses"><p>{period ? "A manager or member with expense permission can record costs." : "Start an accounting period to record expenses."}</p></Panel>)}
       </>}
     </main>
   </div>;
 }
-function Overview({ mess, period, user, save, go }: { mess: Mess; period?: Period; user: Person; save: Save; go: (page: Page) => void }) {
-  if (!period) return <Panel title="Your ledger is ready"><p>Start an accounting period to track meals and expenses.</p><button className="primary" onClick={() => go("Periods")}>View accounting periods</button></Panel>;
+function Overview({ mess, period, user, save, go, openRequests }: { mess: Mess; period?: Period; user: Person; save: Save; go: (page: Page) => void; openRequests: () => void }) {
+  if (!period) return <Panel title="Your ledger is ready"><p>Start an accounting period to track meals and expenses.</p><button className="primary" onClick={() => go("All Month Details")}>View accounting periods</button></Panel>;
   const { members, totals } = summarize(period, mess.people);
   const mine = members[user.id];
+  const today = dhakaNow().date;
+  const todayCounts = mess.requests.find(row => row.period === period.id && row.date === today && row.member === user.id)?.counts
+    ?? (user.auto && user.autoSince && user.autoSince <= today ? user.defaults : undefined) ?? zero;
   const stats = [
     { name: "Your meals", value: quantity(mine.meals), Icon: Soup },
     { name: "Your deposits", value: money(mine.deposits), Icon: Wallet },
@@ -168,17 +191,26 @@ function Overview({ mess, period, user, save, go }: { mess: Mess; period?: Perio
     { name: "Your balance", value: money(mine.balance), Icon: CircleDollarSign },
   ];
   return <div className="stack">
-    <div className="period-banner"><div><span>ACTIVE PERIOD</span><h2>{period.name}</h2><p>Started {formatDate(period.start)}</p></div><button onClick={() => go("Periods")}>View ledger <ArrowUpRight size={16} /></button></div>
-    <div className="stats">{stats.map(({ name, value, Icon }) => <div className="stat" key={name}><Icon size={19} /><p>{name}</p><strong>{value}</strong></div>)}</div>
-    <div className="columns"><Panel title="Mess summary"><dl>{Object.entries({
+    <div className="dashboard-grid"><div className="stack"><div className="period-banner"><div><span>ACTIVE PERIOD</span><h2>{period.name}</h2><p>Started {formatDate(period.start)}</p></div><button onClick={() => go("Active Month Details")}>View ledger <ArrowUpRight size={16} /></button></div>
+    <Panel title="Mess summary"><dl>{Object.entries({
       "Cash balance": money(totals.balance), "Opening balance": money(totals.opening), "Total deposits": money(totals.deposits),
       "Total meals": quantity(totals.meals), "Meal costs": money(totals.food), "Meal rate": totals.meals ? money(totals.rate) : "Pending meals",
       "Individual costs": money(totals.individual), "Shared costs": money(totals.shared),
-    }).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></Panel>
-      <div className="stack"><Panel title="Meal requests"><p>Daily cutoff at {mess.cutoff} Dhaka time.</p><button className="secondary" onClick={() => go("Meals")}>Manage meal requests</button></Panel>
+    }).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl></Panel></div>
+      <div className="stack">    <div className="stats" aria-label="My summary">{stats.map(({ name, value, Icon }) => <div className="stat" key={name}><Icon size={19} /><p>{name}</p><strong>{value}</strong></div>)}</div>
+      <Panel title="My meal request"><dl>{slots.map(slot => <div key={slot}><dt>{labels[slot]}</dt><dd>{quantity(todayCounts[slot])}</dd></div>)}</dl>
+        <p>Daily cutoff at {mess.cutoff} Dhaka time · Automatic requests {user.auto ? "on" : "off"}</p>
+        <button className="secondary" onClick={openRequests}>View or edit request</button></Panel>
         <Panel title="Your bazar dates"><BazarDates mess={mess} period={period} person={user} editable save={save} /></Panel></div>
     </div>
-    <Panel title="Member balances"><Balances mess={mess} period={period} /></Panel>
+    <section><h2>All members · {mess.people.length}</h2><div className="member-grid">{mess.people.map(person => {
+      const row = members[person.id];
+      return <Panel title={person.name} key={person.id}>
+        <p className={row.balance < 0 ? "negative" : "positive"}>{row.balance < 0 ? "Owes" : row.balance > 0 ? "Receives" : "Settled"} · {money(Math.abs(row.balance))}</p>
+        <dl>{Object.entries({ Meals: quantity(row.meals), Deposits: money(row.deposits), "Opening balance": money(row.opening), "Meal cost": money(row.food), "Individual cost": money(row.individual), "Shared cost": money(row.shared), "Total cost": money(row.expense) })
+          .map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      </Panel>;
+    })}</div></section>
   </div>;
 }
 function BazarDates({ mess, period, person, editable, save }: { mess: Mess; period?: Period; person: Person; editable: boolean; save: Save }) {
@@ -194,10 +226,12 @@ function Balances({ mess, period }: { mess: Mess; period: Period }) {
       {[row.opening, row.deposits, row.food, row.individual, row.shared, row.expense].map((item, index) => <td key={index}>{money(item)}</td>)}
       <td className={row.balance < 0 ? "negative" : "positive"}>{money(row.balance)}</td></tr>; })}</tbody></table></div>;
 }
-function Meals({ mess, period, user, canWrite, save }: { mess: Mess; period: Period; user: Person; canWrite: boolean; save: Save }) {
+function Meals({ mess, period, user, canWrite, tab, setTab, save }: { mess: Mess; period: Period; user: Person; canWrite: boolean; tab: "record" | "requests"; setTab: (tab: "record" | "requests") => void; save: Save }) {
   const today = dhakaNow().date;
   const [day, setDay] = useState(today);
   const [who, setWho] = useState("all");
+  const [requestDay, setRequestDay] = useState(today);
+  const recording = canWrite && tab === "record";
   const selected = mess.people.filter(person => who === "all" || person.id === who);
   const currentCounts = Object.assign({}, ...period.entries.filter(row => row.kind === "meal" && row.date === day).map(row => row.counts));
   const requests = mess.requests.filter(row => row.period === period.id);
@@ -206,17 +240,19 @@ function Meals({ mess, period, user, canWrite, save }: { mess: Mess; period: Per
     .map(person => ({ member: person.id, date: today, counts: person.defaults!, status: "pending", automatic: true }));
   const queue = [...requests.filter(row => row.status === "pending"), ...suggested];
   return <div className="stack">
-    {canWrite && <Panel title="Record daily meals">
+    {canWrite && <div className="tabs" aria-label="Meal options"><button aria-pressed={recording} onClick={() => setTab("record")}>Add Meal</button><button aria-pressed={!recording} onClick={() => setTab("requests")}>Meal Request</button></div>}
+    {recording && <Panel title="Record daily meals">
       <div className="meal-fields"><Field label="Date"><input type="date" value={day} min={period.start} max={today} onChange={event => setDay(event.target.value)} /></Field>
         <Field label="Members"><select value={who} onChange={event => setWho(event.target.value)}><option value="all">All members</option>{mess.people.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}</select></Field></div>
-      <Form key={day + who + JSON.stringify(currentCounts)} save={save} label="Save meals" action={f => ({ op: "meal", date: day, counts: Object.fromEntries(selected.map(person => [person.id, values(f, person.id)])) })}>
+      <Form key={day + who + JSON.stringify(currentCounts)} save={save} label="Add meal" action={f => ({ op: "meal", date: day, counts: Object.fromEntries(selected.map(person => [person.id, values(f, person.id)])) })}>
         {selected.map(person => <div className="subrow" key={person.id}><h3>{person.name}</h3><MealFields prefix={person.id} counts={currentCounts[person.id]} /></div>)}
       </Form>
     </Panel>}
-    <div className="columns"><Panel title="Request a meal">
+    {!recording && <><div className="columns"><Panel title="Request a meal">
       <p>Today's requests close at {mess.cutoff} Dhaka time.</p>
       <Form save={save} label="Submit request" action={f => ({ op: "request", date: str(f, "date"), counts: values(f) })}>
-        <DateField min={today} /><MealFields />
+        <Field label="Date"><input name="date" type="date" required value={requestDay} min={today} onChange={event => setRequestDay(event.target.value)} /></Field>
+        <MealFields key={requestDay + JSON.stringify(own.find(row => row.date === requestDay)?.counts)} counts={own.find(row => row.date === requestDay)?.counts} />
       </Form>
       {own.length > 0 && <ul className="compact">{own.sort((a, b) => b.date.localeCompare(a.date)).map(row => <li key={row.date}>{formatDate(row.date)} · {quantity(totalMeals(row.counts))} meals · {row.status}</li>)}</ul>}
     </Panel><Panel title="Automatic meal requests">
@@ -228,14 +264,17 @@ function Meals({ mess, period, user, canWrite, save }: { mess: Mess; period: Per
     {canWrite && <Panel title="Review meal requests">{queue.length ? <ul className="compact">{queue.map(row => <li key={row.member + row.date}>
       <strong>{nameOf(mess, row.member)}</strong> · {formatDate(row.date)} · {slots.map(slot => labels[slot] + " " + quantity(row.counts[slot])).join(" · ")}
       <div className="actions">{[true, false].map(approve => <button key={String(approve)} className="secondary" disabled={row.date > today} onClick={() => save({ op: "review", date: row.date, member: row.member, approve })}>{approve ? "Approve" : "Decline"}</button>)}</div>
-    </li>)}</ul> : <p>No pending requests.</p>}</Panel>}
+    </li>)}</ul> : <p>No pending requests.</p>}</Panel>}</>}
   </div>;
 }
 function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Save }) {
   const [type, setType] = useState<"food" | "shared" | "individual">("food");
   return <Panel title="Record an expense">
-    <div className="tabs">{(["food", "shared", "individual"] as const).map(kind => <button type="button" key={kind} aria-pressed={type === kind} onClick={() => setType(kind)}>{kindLabels[kind]}</button>)}</div>
-    <Form key={type} save={save} label="Add expense" action={f => {
+    <div className="tabs"><button aria-pressed={type === "food"} onClick={() => setType("food")}>Meal Cost</button>
+      <button aria-pressed={type !== "food"} onClick={() => setType("shared")}>Other Cost</button></div>
+    {type !== "food" && <Field label="Cost type"><select value={type} onChange={event => setType(event.target.value === "individual" ? "individual" : "shared")}>
+      <option value="shared">Shared</option><option value="individual">Individual</option></select></Field>}
+    <Form key={type} save={save} label="Add cost" action={f => {
       const base = { op: type, date: str(f, "date"), note: str(f, "note") };
       if (type === "food") return { ...base, cost: number(f.get("amount")), shoppers: f.getAll("people"), credit: f.has("credit") };
       if (type === "shared") return { ...base, cost: number(f.get("amount")), members: f.getAll("people") };
@@ -261,12 +300,12 @@ function entryDetails(mess: Mess, row: Entry, pdf = false) {
   for (const [id, counts] of Object.entries(row.counts ?? {})) details.push(nameOf(mess, id) + " · " + slots.map(slot => labels[slot] + " " + quantity(counts[slot])).join(", ") + " · Total " + quantity(totalMeals(counts)));
   return details;
 }
-function Periods({ mess, manager, save }: { mess: Mess; manager: boolean; save: Save }) {
+function Periods({ mess, manager, archive, save }: { mess: Mess; manager: boolean; archive: boolean; save: Save }) {
   const active = activePeriod(mess);
   const [selection, setSelection] = useState("");
   const [kind, setKind] = useState<Entry["kind"]>("meal");
   const [limit, setLimit] = useState(20);
-  const period = mess.periods.find(item => item.id === selection) ?? active;
+  const period = archive ? mess.periods.find(item => item.id === selection) : active;
   const records = period?.entries.filter(row => row.kind === kind).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)) ?? [];
   async function download() {
     if (!period) return;
@@ -293,46 +332,90 @@ function Periods({ mess, manager, save }: { mess: Mess; manager: boolean; save: 
     pdf.save("AmarMess-" + period.start + ".pdf");
   }
   return <div className="stack">
-    <div className="columns"><Panel title="Accounting periods">
-      {mess.periods.length ? <ul className="compact">{[...mess.periods].reverse().map(item => <li key={item.id}><button className="text-button" onClick={() => { setSelection(item.id); setLimit(20); }}>{item.name}</button> <span>{item.end ? "Closed" : "Active"} · {formatDate(item.start)}{item.end ? " – " + formatDate(item.end) : ""}</span></li>)}</ul> : <p>No periods yet.</p>}
-    </Panel>{manager && <Panel title="Start a new period">
-      {active && <p>This closes the current period and locks its ledger.</p>}
-      <Form save={async payload => { if (active && !window.confirm("Close the current accounting period?")) return false; if (!await save(payload)) return false; setSelection(""); return true; }} label="Start period" action={f => ({ op: "period", name: str(f, "name"), start: str(f, "date"), carry: f.has("carry") })}>
-        <Field label="Period name"><input name="name" placeholder="November 2026" required minLength={2} maxLength={90} /></Field>
-        <DateField max={dhakaNow().date} />{active && <Check name="carry">Carry forward member balances</Check>}
-      </Form></Panel>}</div>
+    {archive && <Panel title="Month list">
+      {mess.periods.length ? <ul className="compact">{[...mess.periods].reverse().map(item => <li className="month-row" key={item.id}>
+        <div><strong>{item.name}</strong><p>{formatDate(item.start)} {item.end ? "– " + formatDate(item.end) : "· Active"}</p></div>
+        <button className="secondary" aria-pressed={selection === item.id} onClick={() => { setSelection(item.id); setLimit(20); setKind("meal"); }}>View details</button>
+      </li>)}</ul> : <p>No accounting months yet.</p>}
+    </Panel>}
+    {!archive && !period && <Panel title="Active month details"><p>Start an accounting month to view its ledger.</p></Panel>}
     {period && <Panel title={period.name}>
       <div className="actions"><button className="secondary" onClick={download}>Download PDF</button></div>
       {manager && period.id === active?.id && <details><summary>Rename active period</summary><Form save={save} label="Rename" action={f => ({ op: "rename", name: str(f, "name") })}>
         <Field label="Period name"><input name="name" key={period.name} defaultValue={period.name} minLength={2} maxLength={90} required /></Field></Form></details>}
       <Balances mess={mess} period={period} />
       <div className="tabs">{(Object.keys(kindLabels) as Entry["kind"][]).map(key => <button key={key} aria-pressed={kind === key} onClick={() => { setKind(key); setLimit(20); }}>{kindLabels[key]}</button>)}</div>
-      {records.length ? <ul className="compact">{records.slice(0, limit).map(row => <li key={row.id}>
-        <strong>{formatDate(row.date)}</strong>{entryDetails(mess, row).map((detail, i) => <div key={i}>{detail}</div>)}
-        {manager && period.id === active?.id && <button className="text-button" onClick={() => { if (window.confirm("Remove this ledger entry?")) void save({ op: "removeEntry", entry: row.id }); }}>Remove entry</button>}
-      </li>)}</ul> : <p>No {kindLabels[kind].toLowerCase()} recorded.</p>}
-      {records.length > limit && <button className="secondary" onClick={() => setLimit(limit + 20)}>Load more</button>}
+      {records.length ? (kind === "meal"
+        ? <DailyMealTable mess={mess} records={records} limit={limit} />
+        : <ul className="compact report-list">{records.slice(0, limit).map(row => <li key={row.id}>
+          <strong>{formatDate(row.date)}</strong>{entryDetails(mess, row).map((detail, i) => <div key={i}>{detail}</div>)}
+          {manager && period.id === active?.id && <button className="text-button" onClick={() => { if (window.confirm("Remove this ledger entry?")) void save({ op: "removeEntry", entry: row.id }); }}>Remove entry</button>}
+        </li>)}</ul>)
+        : <p>No {kindLabels[kind].toLowerCase()} recorded.</p>}
+      {kind === "meal" && manager && period.id === active?.id && records.length > 0 && <details><summary>Remove a meal entry</summary>
+        <ul className="compact">{records.map(row => <li key={row.id}><span>{formatDate(row.date)} · {Object.keys(row.counts ?? {}).length} members </span>
+          <button className="text-button" onClick={() => { if (window.confirm("Remove this meal entry?")) void save({ op: "removeEntry", entry: row.id }); }}>Remove entry</button></li>)}</ul>
+      </details>}
+      {(kind === "meal" ? new Set(records.map(row => row.date)).size : records.length) > limit && <button className="secondary" onClick={() => setLimit(limit + 20)}>Load more</button>}
     </Panel>}
   </div>;
 }
+function DailyMealTable({ mess, records, limit }: { mess: Mess; records: Entry[]; limit: number }) {
+  const byDate = new Map<string, Record<string, Counts>>();
+  for (const row of records) byDate.set(row.date, { ...byDate.get(row.date), ...row.counts });
+  function cells(counts: Counts) {
+    return <>{slots.map(slot => <div key={slot}>{labels[slot]} {quantity(counts[slot])}</div>)}<strong>Total {quantity(totalMeals(counts))}</strong></>;
+  }
+  return <div className="table-wrap"><table className="daily-meals"><thead><tr>
+    <th scope="col">Date</th><th scope="col">Total meals</th>{mess.people.map(person => <th scope="col" key={person.id}>{person.name}</th>)}
+  </tr></thead><tbody>{[...byDate].slice(0, limit).map(([day, rows]) => {
+    const totals = { ...zero };
+    for (const counts of Object.values(rows)) for (const slot of slots) totals[slot] += counts[slot];
+    return <tr key={day}><th scope="row">{formatDate(day)}</th><td>{cells(totals)}</td>
+      {mess.people.map(person => <td key={person.id}>{cells(rows[person.id] ?? zero)}</td>)}</tr>;
+  })}</tbody></table></div>;
+}
+function StartMonth({ period, manager, save, onStarted }: { period?: Period; manager: boolean; save: Save; onStarted: () => void }) {
+  return <Panel title="Start new month">{manager ? <>
+    {period && <p>This closes the active month. Check its totals before carrying balances forward.</p>}
+    <Form save={async payload => {
+      if (period && !window.confirm("Close the current accounting month?")) return false;
+      const saved = await save(payload);
+      if (saved) onStarted();
+      return saved;
+    }} label="Start new month" action={f => ({ op: "period", name: str(f, "name"), start: str(f, "date"), carry: f.has("carry") })}>
+      <Field label="Month name"><input name="name" required minLength={2} maxLength={90} /></Field>
+      <DateField max={dhakaNow().date} />{period && <Check name="carry">Carry forward member balances</Check>}
+    </Form></> : <p>Only the manager can start a new accounting month.</p>}</Panel>;
+}
+function ChangeManager({ mess, user, manager, save }: { mess: Mess; user: Person; manager: boolean; save: Save }) {
+  const candidates = mess.people.filter(person => person.id !== user.id);
+  return <Panel title="Change mess manager">
+    {!manager ? <p>Only the current manager can transfer access.</p> : candidates.length ? <Form
+      save={async payload => window.confirm("Transfer manager access?") && await save(payload)}
+      label="Transfer access" action={f => ({ op: "manager", member: str(f, "member") })}>
+      <MemberSelect people={candidates} />
+    </Form> : <p>Invite a member before transferring access.</p>}
+  </Panel>;
+}
 function Members({ mess, period, user, manager, save }: { mess: Mess; period?: Period; user: Person; manager: boolean; save: Save }) {
+  const [adding, setAdding] = useState(false);
   return <div className="stack">
-    {manager && <div className="columns"><Panel title="Invite a member">
+    {manager && <div className="tabs"><button aria-pressed={!adding} onClick={() => setAdding(false)}>All Members List</button>
+      <button aria-pressed={adding} onClick={() => setAdding(true)}>Add New Member</button></div>}
+    {manager && adding ? <Panel title="Invite a member">
       <Form save={save} label="Generate invitation" action={f => ({ op: "member", name: str(f, "name"), email: str(f, "email"), phone: str(f, "phone") })}>
         <Field label="Name"><input name="name" required minLength={2} maxLength={90} /></Field>
         <Field label="Email"><input name="email" type="email" required /></Field>
         <Field label="Phone (optional)"><input name="phone" type="tel" maxLength={32} /></Field>
       </Form></Panel>
-      <Panel title="Transfer manager access"><p>The selected member will manage this workspace.</p>
-      <Form save={async payload => window.confirm("Transfer manager access?") && await save(payload)} label="Transfer access" action={f => ({ op: "manager", member: str(f, "member") })}>
-        <MemberSelect people={mess.people.filter(person => person.id !== user.id)} /></Form></Panel></div>}
-    <div className="member-grid">{mess.people.map(person => <Panel title={person.name} key={person.id}>
+      : <div className="member-grid">{mess.people.map(person => <Panel title={person.name} key={person.id}>
       <p className="member-role">{mess.manager === person.id ? "Manager" : "Member"}</p><p>{person.email}</p>{person.phone && <p>{person.phone}</p>}
       {mess.manager !== person.id && <><h3>Permissions</h3>{manager ? <Form key={person.permissions.join(",")} save={save} label="Save permissions" action={f => ({ op: "permissions", member: person.id, permissions: f.getAll("permission") })}>
         {(["deposit", "meal", "expense"] as const).map(permission => <Check name="permission" key={permission} value={permission} checked={person.permissions.includes(permission)}>Record {permission}s</Check>)}
       </Form> : <p>{person.permissions.join(", ") || "Standard member access"}</p>}</>}
       <h3>Bazar dates</h3><BazarDates mess={mess} period={period} person={person} editable={manager || user.id === person.id} save={save} />
-    </Panel>)}</div>
+    </Panel>)}</div>}
   </div>;
 }
 function SettingsPage({ mess, manager, save }: { mess: Mess; manager: boolean; save: Save }) {
@@ -354,12 +437,15 @@ function SettingsPage({ mess, manager, save }: { mess: Mess; manager: boolean; s
         <Field label="Ledger JSON"><input type="file" name="ledger" accept=".json,application/json" required /></Field>
       </Form>
     </Panel>}
-    <Panel title="Delete mess"><p>Permanently deletes the workspace and every accounting period.</p>
-      <Form danger save={async payload => window.confirm("Permanently delete this mess and its ledger?") && await save(payload)} label="Delete mess" action={f => ({ op: "delete", name: str(f, "name") })}>
-        <Field label="Type the mess name to confirm"><input name="name" required /></Field>
-      </Form>
-    </Panel>
   </div>;
+}
+function DeleteMess({ mess, manager, save }: { mess: Mess; manager: boolean; save: Save }) {
+  return <Panel title="Delete mess">{manager ? <>
+    <p>Permanently deletes the workspace and every accounting month.</p>
+    <Form danger save={async payload => window.confirm("Permanently delete this mess and its ledger?") && await save(payload)} label="Delete mess" action={f => ({ op: "delete", name: str(f, "name") })}>
+      <Field label="Type the mess name to confirm"><input name="name" required /></Field>
+    </Form></> : <p>Only the manager can delete the mess.</p>}
+  </Panel>;
 }
 function Profile({ user, save }: { user: Person; save: Save }) {
   const [status, setStatus] = useState("");

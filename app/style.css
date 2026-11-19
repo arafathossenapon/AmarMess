@@ -123,3 +123,17 @@ summary { cursor: pointer; margin-bottom: 8px; }
   .identity { font-size: .82rem; }
   .avatar { flex-basis: 31px; height: 31px; }
 }
+
+.dashboard-grid { display: grid; grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.65fr); gap: 18px; align-items: start; }
+.account-nav { border-top: 1px solid var(--line); padding-top: 10px; }
+.month-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.daily-meals td, .daily-meals thead th { text-align: left; vertical-align: top; }
+.daily-meals tbody tr:nth-child(even) { background: #f2f4ea; }
+.report-list > li { background: #f2f4ea; border: 0; border-radius: 9px; padding: 12px; margin-bottom: 8px; }
+@media (max-width: 1100px) {
+  .dashboard-grid .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+  .account-nav { border: 0; padding-top: 0; width: auto; }
+}
