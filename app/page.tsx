@@ -313,19 +313,39 @@ function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Sa
       const base = { op: type, date: str(f, "date"), note: str(f, "note") };
       if (type === "food") return { ...base, cost: number(f.get("amount")), shoppers: f.getAll("people"), credit: f.has("credit") };
       if (type === "shared") return { ...base, cost: number(f.get("amount")), members: f.getAll("people") };
-      return { ...base, amounts: Object.fromEntries(mess.people.map(person => [person.id, number(f.get(person.id))]).filter(([, value]) => value !== 0)) };
+      return { ...base, amounts: Object.fromEntries(f.getAll("people").map(id => [String(id), number(f.get(String(id)))])) };
     }}>
       <DateField min={period.start} max={dhakaNow().date} />
       {type === "shared" ? <SharedExpenseFields people={mess.people} /> : <>
         {type === "food" && <MoneyField />}
         <Notes label={type === "food" ? "Bazar list" : "Expense details"} />
-        {type === "individual" ? <div className="meal-fields">{mess.people.map(person => <MoneyField key={person.id} name={person.id} label={person.name + " (BDT)"} required={false} />)}</div> : <>
+        {type === "individual" ? <IndividualExpenseFields people={mess.people} /> : <>
           <fieldset><legend>Shoppers</legend>{mess.people.map(person => <Check key={person.id} name="people" value={person.id}>{person.name}</Check>)}</fieldset>
           <Check name="credit">Credit the shoppers' deposits for this expense, split equally</Check>
         </>}
       </>}
     </Form>
   </Panel>;
+}
+function IndividualExpenseFields({ people }: { people: Person[] }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  return <fieldset className="individual-cost-members">
+    <legend>Individual charges</legend>
+    <p>Select the members to charge and enter their amounts.</p>
+    {people.map(person => {
+      const checked = selected.includes(person.id);
+      return <div className="individual-cost-row" key={person.id}>
+        <label><input type="checkbox" name="people" value={person.id} checked={checked}
+          onChange={event => {
+            const enabled = event.target.checked;
+            setSelected(ids => enabled ? [...ids, person.id] : ids.filter(id => id !== person.id));
+          }} /> <span>{person.name}</span></label>
+        <input aria-label={`${person.name} amount (BDT)`} name={person.id}
+          type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01"
+          placeholder="0.00" disabled={!checked} required={checked} />
+      </div>;
+    })}
+  </fieldset>;
 }
 function SharedExpenseFields({ people }: { people: Person[] }) {
   const [amount, setAmount] = useState("");

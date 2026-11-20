@@ -200,3 +200,9 @@ html:has(.workspace-drawer[open]) { overflow: hidden; }
 .shared-split-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 40px; padding: 6px 8px; border-radius: 6px; background: var(--soft); cursor: pointer; }
 .shared-split-row span { overflow-wrap: anywhere; }
 .shared-split-row strong { font-variant-numeric: tabular-nums; }
+
+.individual-cost-members { display: grid; gap: 6px; }
+.individual-cost-members > p { font-size: .875rem; margin-bottom: 4px; }
+.individual-cost-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(76px, 8rem); gap: 10px; align-items: center; padding: 6px 8px; border-radius: 6px; background: var(--soft); }
+.individual-cost-row label { display: flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; overflow-wrap: anywhere; }
+.individual-cost-row input:disabled { background: var(--canvas); opacity: .65; }
