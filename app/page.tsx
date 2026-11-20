@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createAuthClient } from "better-auth/react";
 import { ArrowUpRight, Bell, CalendarDays, CircleDollarSign, LayoutDashboard, LogOut, Menu, Settings, ShoppingBasket, Soup, UserRound, Users, Wallet, X } from "lucide-react";
-import { activePeriod, dhakaNow, kindLabels, money, quantity, slots, summarize, totalMeals, zero, type Counts, type Entry, type Mess, type Period, type Person } from "../lib/domain";
+import { activePeriod, dhakaNow, kindLabels, money, quantity, slots, split, summarize, totalMeals, zero, type Counts, type Entry, type Mess, type Period, type Person } from "../lib/domain";
 
 const auth = createAuthClient();
 const nav = [
@@ -316,13 +316,47 @@ function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Sa
       return { ...base, amounts: Object.fromEntries(mess.people.map(person => [person.id, number(f.get(person.id))]).filter(([, value]) => value !== 0)) };
     }}>
       <DateField min={period.start} max={dhakaNow().date} />
-      {type !== "individual" && <MoneyField />}
-      <Notes label={type === "food" ? "Bazar list" : "Expense details"} />
-      {type === "individual" ? <div className="meal-fields">{mess.people.map(person => <MoneyField key={person.id} name={person.id} label={person.name + " (BDT)"} required={false} />)}</div>
-        : <fieldset><legend>{type === "food" ? "Shoppers" : "Split equally among"}</legend>{mess.people.map(person => <Check key={person.id} name="people" value={person.id} checked={type === "shared"}>{person.name}</Check>)}</fieldset>}
-      {type === "food" && <Check name="credit">Credit the shoppers' deposits for this expense, split equally</Check>}
+      {type === "shared" ? <SharedExpenseFields people={mess.people} /> : <>
+        {type === "food" && <MoneyField />}
+        <Notes label={type === "food" ? "Bazar list" : "Expense details"} />
+        {type === "individual" ? <div className="meal-fields">{mess.people.map(person => <MoneyField key={person.id} name={person.id} label={person.name + " (BDT)"} required={false} />)}</div> : <>
+          <fieldset><legend>Shoppers</legend>{mess.people.map(person => <Check key={person.id} name="people" value={person.id}>{person.name}</Check>)}</fieldset>
+          <Check name="credit">Credit the shoppers' deposits for this expense, split equally</Check>
+        </>}
+      </>}
     </Form>
   </Panel>;
+}
+function SharedExpenseFields({ people }: { people: Person[] }) {
+  const [amount, setAmount] = useState("");
+  const [excluded, setExcluded] = useState<string[]>([]);
+  const selected = people.filter(person => !excluded.includes(person.id));
+  const cents = number(amount);
+  const validAmount = Number.isFinite(cents) && cents >= 1 && cents <= 100000000;
+  const shares = validAmount ? split(cents, Object.fromEntries(selected.map(person => [person.id, 1]))) : {};
+
+  return <>
+    <Field label="Amount (BDT)">
+      <input name="amount" type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01" required
+        value={amount} onChange={event => setAmount(event.target.value)} />
+    </Field>
+    <Notes label="Expense details" />
+    <fieldset className="shared-split">
+      <legend>Split equally among</legend>
+      <p role="status">{selected.length === 0 ? "Select at least one member."
+        : validAmount ? `${money(cents)} split among ${selected.length} ${selected.length === 1 ? "member" : "members"}`
+        : "Enter a valid amount to see each member's share."}</p>
+      {people.map(person => <label className="shared-split-row" key={person.id}>
+        <input type="checkbox" name="people" value={person.id} checked={!excluded.includes(person.id)}
+          onChange={event => {
+            const checked = event.target.checked;
+            setExcluded(current => checked ? current.filter(id => id !== person.id) : [...current, person.id]);
+          }} />
+        <span>{person.name}</span>
+        <strong>{person.id in shares ? money(shares[person.id]) : "—"}</strong>
+      </label>)}
+    </fieldset>
+  </>;
 }
 function entryDetails(mess: Mess, row: Entry, pdf = false) {
   const currency = (amount: number) => pdf ? "BDT " + (amount / 100).toFixed(2) : money(amount);

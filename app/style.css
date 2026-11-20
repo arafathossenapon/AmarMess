@@ -190,3 +190,9 @@ html:has(.workspace-drawer[open]) { overflow: hidden; }
 .activity-icon[data-kind="deposit"] { background: #d9eee5; }
 .activity-card .activity-message { color: var(--ink); font-weight: 650; }
 .activity-card footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 8px; color: var(--muted); font-size: .8rem; }
+
+.shared-split { display: grid; gap: 4px; }
+.shared-split > p { margin-bottom: 4px; font-size: .875rem; }
+.shared-split-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 40px; padding: 6px 8px; border-radius: 6px; background: var(--soft); cursor: pointer; }
+.shared-split-row span { overflow-wrap: anywhere; }
+.shared-split-row strong { font-variant-numeric: tabular-nums; }
