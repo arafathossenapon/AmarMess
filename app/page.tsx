@@ -334,6 +334,8 @@ function SharedExpenseFields({ people }: { people: Person[] }) {
   const cents = number(amount);
   const validAmount = Number.isFinite(cents) && cents >= 1 && cents <= 100000000;
   const shares = validAmount ? split(cents, Object.fromEntries(selected.map(person => [person.id, 1]))) : {};
+  const shareValues = [...new Set(Object.values(shares))].sort((a, b) => a - b);
+  const shareText = shareValues.map(money).join("–");
 
   return <>
     <Field label="Amount (BDT)">
@@ -343,9 +345,12 @@ function SharedExpenseFields({ people }: { people: Person[] }) {
     <Notes label="Expense details" />
     <fieldset className="shared-split">
       <legend>Split equally among</legend>
-      <p role="status">{selected.length === 0 ? "Select at least one member."
-        : validAmount ? `${money(cents)} split among ${selected.length} ${selected.length === 1 ? "member" : "members"}`
-        : "Enter a valid amount to see each member's share."}</p>
+      <div className="shared-split-summary" role="status">
+        {selected.length === 0 ? <p>Select at least one member.</p>
+          : !validAmount ? <p>Enter an amount to see each member's share.</p>
+          : <><strong>{shareText} per member</strong>
+            <p>{money(cents)} total · {selected.length} {selected.length === 1 ? "member" : "members"} selected</p></>}
+      </div>
       {people.map(person => <label className="shared-split-row" key={person.id}>
         <input type="checkbox" name="people" value={person.id} checked={!excluded.includes(person.id)}
           onChange={event => {
@@ -353,7 +358,7 @@ function SharedExpenseFields({ people }: { people: Person[] }) {
             setExcluded(current => checked ? current.filter(id => id !== person.id) : [...current, person.id]);
           }} />
         <span>{person.name}</span>
-        <strong>{person.id in shares ? money(shares[person.id]) : "—"}</strong>
+        <span className="shared-split-amount">{person.id in shares ? <><small>Share</small><strong>{money(shares[person.id])}</strong></> : "—"}</span>
       </label>)}
     </fieldset>
   </>;
