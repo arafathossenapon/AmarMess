@@ -304,7 +304,7 @@ function Meals({ mess, period, save }: { mess: Mess; period: Period; save: Save 
 }
 function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Save }) {
   const [type, setType] = useState<"food" | "shared" | "individual">("food");
-  return <Panel title="Record an expense">
+  return <div className="expense-entry"><Panel title="Record an expense">
     <div className="tabs"><button aria-pressed={type === "food"} onClick={() => setType("food")}>Meal Cost</button>
       <button aria-pressed={type !== "food"} onClick={() => setType("shared")}>Other Cost</button></div>
     {type !== "food" && <Field label="Cost type"><select value={type} onChange={event => setType(event.target.value === "individual" ? "individual" : "shared")}>
@@ -325,20 +325,20 @@ function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Sa
         </>}
       </>}
     </Form>
-  </Panel>;
+  </Panel></div>;
 }
 function IndividualExpenseFields({ people }: { people: Person[] }) {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [excluded, setExcluded] = useState<string[]>([]);
   return <fieldset className="individual-cost-members">
     <legend>Individual charges</legend>
-    <p>Select the members to charge and enter their amounts.</p>
+    <p>Uncheck anyone you want to exclude, then enter the amounts.</p>
     {people.map(person => {
-      const checked = selected.includes(person.id);
+      const checked = !excluded.includes(person.id);
       return <div className="individual-cost-row" key={person.id}>
         <label><input type="checkbox" name="people" value={person.id} checked={checked}
           onChange={event => {
             const enabled = event.target.checked;
-            setSelected(ids => enabled ? [...ids, person.id] : ids.filter(id => id !== person.id));
+            setExcluded(ids => enabled ? ids.filter(id => id !== person.id) : [...ids, person.id]);
           }} /> <span>{person.name}</span></label>
         <input aria-label={`${person.name} amount (BDT)`} name={person.id}
           type="number" inputMode="decimal" min="0.01" max="1000000" step="0.01"
