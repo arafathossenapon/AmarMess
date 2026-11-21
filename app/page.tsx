@@ -298,7 +298,7 @@ function Meals({ mess, period, save }: { mess: Mess; period: Period; save: Save 
   const currentCounts: Record<string, Counts> = Object.assign({}, ...period.entries.filter(row => row.kind === "meal" && row.date === day).map(row => row.counts));
   const initialCounts = Object.fromEntries(selected.map(person => [person.id, currentCounts[person.id] ?? mess.mealDefaults ?? zero]));
 
-  return <Panel title="Record daily meals">
+  return <div className="meal-entry"><Panel title="Record daily meals">
     <div className="actions"><button type="button" className="secondary" aria-haspopup="dialog" onClick={() => {
       setSettingsError(false);
       settings.current?.querySelector("form")?.reset();
@@ -324,7 +324,7 @@ function Meals({ mess, period, save }: { mess: Mess; period: Period; save: Save 
     <Form key={day + who + JSON.stringify(initialCounts)} save={save} label="Add meal" action={f => ({ op: "meal", date: day, counts: Object.fromEntries(selected.map(person => [person.id, values(f, person.id)])) })}>
       {selected.map(person => <div className="subrow" key={person.id}><h3>{person.name}</h3><MealFields prefix={person.id} counts={initialCounts[person.id]} /></div>)}
     </Form>
-  </Panel>;
+  </Panel></div>;
 }
 function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Save }) {
   const [type, setType] = useState<"food" | "shared" | "individual">("food");
