@@ -19,6 +19,7 @@ export type MealRequest = { member: string; date: string; counts: Counts; status
 export type Bazar = { member: string; date: string; period: string };
 export type Mess = {
   name: string; manager: string; people: Person[]; periods: Period[];
+  mealDefaults?: Counts;
   requests: MealRequest[]; bazar: Bazar[]; cutoff: string;
 };
 export const zero: Counts = { breakfast: 0, lunch: 0, dinner: 0 };
@@ -72,5 +73,3 @@ export function summarize(period: Period, people: Person[]) {
   totals.balance = totals.opening + totals.deposits - totals.food - totals.shared - totals.individual;
   return { members, totals };
 }
-
-

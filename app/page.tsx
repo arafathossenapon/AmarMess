@@ -292,14 +292,38 @@ function Meals({ mess, period, save }: { mess: Mess; period: Period; save: Save 
   const today = dhakaNow().date;
   const [day, setDay] = useState(today);
   const [who, setWho] = useState("all");
+  const [settingsError, setSettingsError] = useState(false);
+  const settings = useRef<HTMLDialogElement>(null);
   const selected = mess.people.filter(person => who === "all" || person.id === who);
-  const currentCounts = Object.assign({}, ...period.entries.filter(row => row.kind === "meal" && row.date === day).map(row => row.counts));
+  const currentCounts: Record<string, Counts> = Object.assign({}, ...period.entries.filter(row => row.kind === "meal" && row.date === day).map(row => row.counts));
+  const initialCounts = Object.fromEntries(selected.map(person => [person.id, currentCounts[person.id] ?? mess.mealDefaults ?? zero]));
+
   return <Panel title="Record daily meals">
-      <div className="meal-fields"><Field label="Date"><input type="date" value={day} min={period.start} max={today} onChange={event => setDay(event.target.value)} /></Field>
-        <Field label="Members"><select value={who} onChange={event => setWho(event.target.value)}><option value="all">All members</option>{mess.people.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}</select></Field></div>
-      <Form key={day + who + JSON.stringify(currentCounts)} save={save} label="Add meal" action={f => ({ op: "meal", date: day, counts: Object.fromEntries(selected.map(person => [person.id, values(f, person.id)])) })}>
-        {selected.map(person => <div className="subrow" key={person.id}><h3>{person.name}</h3><MealFields prefix={person.id} counts={currentCounts[person.id]} /></div>)}
+    <div className="actions"><button type="button" className="secondary" aria-haspopup="dialog" onClick={() => {
+      setSettingsError(false);
+      settings.current?.querySelector("form")?.reset();
+      settings.current?.showModal();
+    }}>Default meal settings</button></div>
+    <dialog ref={settings} className="meal-default-dialog" aria-labelledby="meal-default-title">
+      <h2 id="meal-default-title">Default meal settings</h2>
+      <p>These amounts prefill unsaved meals for every member. You can adjust them before saving the day.</p>
+      {settingsError && <p className="notice error" role="alert">Defaults could not be saved. Close this window to see the error.</p>}
+      <Form label="Save defaults" action={f => ({ op: "mealDefaults", counts: values(f) })} save={async payload => {
+        setSettingsError(false);
+        const saved = await save(payload);
+        if (saved) settings.current?.close();
+        else setSettingsError(true);
+        return saved;
+      }}>
+        <MealFields counts={mess.mealDefaults} />
+        <button type="button" className="secondary" onClick={() => settings.current?.close()}>Cancel</button>
       </Form>
+    </dialog>
+    <div className="meal-fields"><Field label="Date"><input type="date" value={day} min={period.start} max={today} onChange={event => setDay(event.target.value)} /></Field>
+      <Field label="Members"><select value={who} onChange={event => setWho(event.target.value)}><option value="all">All members</option>{mess.people.map(person => <option value={person.id} key={person.id}>{person.name}</option>)}</select></Field></div>
+    <Form key={day + who + JSON.stringify(initialCounts)} save={save} label="Add meal" action={f => ({ op: "meal", date: day, counts: Object.fromEntries(selected.map(person => [person.id, values(f, person.id)])) })}>
+      {selected.map(person => <div className="subrow" key={person.id}><h3>{person.name}</h3><MealFields prefix={person.id} counts={initialCounts[person.id]} /></div>)}
+    </Form>
   </Panel>;
 }
 function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Save }) {

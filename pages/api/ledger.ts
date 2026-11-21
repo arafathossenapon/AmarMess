@@ -35,6 +35,7 @@ const actions = z.discriminatedUnion("op", [
   z.object({ op: z.literal("bazar"), member: id, date, remove: z.boolean() }),
   z.object({ op: z.literal("deposit"), date, member: id, amount: z.number().int().min(-100000000).max(100000000), note: text }),
   z.object({ op: z.literal("meal"), date, counts: z.record(id, counts) }),
+  z.object({ op: z.literal("mealDefaults"), counts }),
   z.object({ op: z.literal("food"), date, cost: cash, shoppers: z.array(id).min(1), credit: z.boolean(), note: text }),
   z.object({ op: z.literal("shared"), date, cost: cash, members: z.array(id).min(1), note: text }),
   z.object({ op: z.literal("individual"), date, amounts: z.record(id, cash), note: text }),
@@ -163,6 +164,10 @@ api.all("/api/ledger", async (req, res) => {
       check(allows("deposit"), "Deposit permission required.", 403);
       check(a.amount !== 0, "Enter a nonzero deposit.");
       entry({ kind: "deposit", date: a.date, note: a.note, amounts: { [member(a.member).id]: a.amount } });
+      break;
+    case "mealDefaults":
+      check(allows("meal"), "Meal permission required.", 403);
+      mess.mealDefaults = a.counts;
       break;
     case "meal": {
       check(allows("meal"), "Meal permission required.", 403);
