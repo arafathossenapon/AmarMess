@@ -217,10 +217,10 @@ export default function Home() {
         {page === "Mess Settings" && <SettingsPage mess={mess} manager={manager} save={save} />}
         {page === "Profile" && <Profile user={user} save={save} />}
         {page === "Notifications" && <Activity mess={mess} user={user} />}
-        {page === "Add Deposit" && <Panel title="Record a deposit">{period && can("deposit")
+        {page === "Add Deposit" && <div className="deposit-entry"><Panel title="Record a deposit">{period && can("deposit")
           ? <Form save={save} label="Add deposit" action={f => ({ op: "deposit", date: str(f, "date"), member: str(f, "member"), amount: number(f.get("amount")), note: str(f, "note") })}>
             <DateField min={period.start} max={dhakaNow().date} /><MemberSelect people={mess.people} /><MoneyField signed /><Notes />
-          </Form> : <p>{period ? "A manager or member with deposit permission can record deposits." : "Start an accounting period to record deposits."}</p>}</Panel>}
+          </Form> : <p>{period ? "A manager or member with deposit permission can record deposits." : "Start an accounting period to record deposits."}</p>}</Panel></div>}
         {page === "Add Meal" && (period && can("meal") ? <Meals mess={mess} period={period} save={save} /> : <Panel title="Meals"><p>{period ? "Meal entry is available to the manager and members with meal permission." : "Start an accounting period to record meals."}</p></Panel>)}
         {page === "Add Cost" && (period && can("expense") ? <Expenses mess={mess} period={period} save={save} /> : <Panel title="Expenses"><p>{period ? "A manager or member with expense permission can record costs." : "Start an accounting period to record expenses."}</p></Panel>)}
       </>}
