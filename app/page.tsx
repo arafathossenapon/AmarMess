@@ -344,12 +344,37 @@ function Expenses({ mess, period, save }: { mess: Mess; period: Period; save: Sa
         {type === "food" && <MoneyField />}
         <Notes label={type === "food" ? "Bazar list" : "Expense details"} />
         {type === "individual" ? <IndividualExpenseFields people={mess.people} /> : <>
-          <fieldset><legend>Shoppers</legend>{mess.people.map(person => <Check key={person.id} name="people" value={person.id}>{person.name}</Check>)}</fieldset>
+          <ShopperPicker people={mess.people} />
           <Check name="credit">Credit the shoppers' deposits for this expense, split equally</Check>
         </>}
       </>}
     </Form>
   </Panel></div>;
+}
+function ShopperPicker({ people }: { people: Person[] }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const shoppers = people.filter(person => selected.includes(person.id));
+  const available = people.filter(person => !selected.includes(person.id));
+  return <fieldset className="shopper-picker">
+    <legend>Shoppers</legend>
+    {shoppers.length > 0 && <ul className="shopper-chips" aria-label="Selected shoppers">
+      {shoppers.map(person => <li key={person.id}>
+        <input type="hidden" name="people" value={person.id} />
+        <span>{person.name}</span>
+        <button type="button" aria-label={`Remove ${person.name}`} onClick={() => setSelected(ids => ids.filter(id => id !== person.id))}>
+          <X size={16} aria-hidden />
+        </button>
+      </li>)}
+    </ul>}
+    <select aria-label="Add shopper" value="" disabled={available.length === 0}
+      onChange={event => {
+        const id = event.target.value;
+        if (id) setSelected(ids => [...ids, id]);
+      }}>
+      <option value="" disabled>{available.length ? "Select a member" : "All members selected"}</option>
+      {available.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+    </select>
+  </fieldset>;
 }
 function IndividualExpenseFields({ people }: { people: Person[] }) {
   const [excluded, setExcluded] = useState<string[]>([]);
